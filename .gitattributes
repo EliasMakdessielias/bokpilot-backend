@@ -1,0 +1,3 @@
+# Dumpen ar LF-normaliserad och MD5-verifierad mot databasen.
+# Ingen radslutskonvertering far ske - da bryts verifieringen.
+* -text
