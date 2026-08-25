@@ -34,6 +34,7 @@ CREATE TRIGGER trg_write_lock BEFORE INSERT OR DELETE OR UPDATE ON public.bookke
 CREATE TRIGGER byra_medlemskap_sista_admin BEFORE DELETE OR UPDATE ON public.byra_medlemskap FOR EACH ROW EXECUTE FUNCTION skydda_sista_byra_admin();
 -- tabell: companies
 CREATE TRIGGER trg_assign_archive_number BEFORE INSERT ON public.companies FOR EACH ROW EXECUTE FUNCTION assign_archive_number();
+CREATE TRIGGER trg_forbjud_radera_bolag_med_rakenskapsinfo BEFORE DELETE ON public.companies FOR EACH ROW EXECUTE FUNCTION forbjud_radera_bolag_med_rakenskapsinfo();
 CREATE TRIGGER trg_protect_archive_number BEFORE UPDATE ON public.companies FOR EACH ROW EXECUTE FUNCTION protect_archive_number();
 CREATE TRIGGER trg_provision_inboxes AFTER INSERT ON public.companies FOR EACH ROW EXECUTE FUNCTION provision_company_inboxes();
 CREATE TRIGGER trg_seed_new_company AFTER INSERT ON public.companies FOR EACH ROW EXECUTE FUNCTION seed_new_company();
@@ -91,10 +92,10 @@ CREATE TRIGGER trg_periodlas_ver_rows BEFORE INSERT OR DELETE OR UPDATE ON publi
 CREATE TRIGGER trg_write_lock BEFORE INSERT OR DELETE OR UPDATE ON public.verifikation_rows FOR EACH ROW EXECUTE FUNCTION enforce_write_lock_verifikation_rows();
 -- tabell: verifikationer
 CREATE TRIGGER trg_audit_verifikation_del BEFORE DELETE ON public.verifikationer FOR EACH ROW EXECUTE FUNCTION audit_verifikation();
-CREATE TRIGGER trg_immutabel_verifikation BEFORE UPDATE ON public.verifikationer FOR EACH ROW EXECUTE FUNCTION enforce_immutabel_verifikation();
 CREATE TRIGGER trg_audit_verifikation_ins AFTER INSERT ON public.verifikationer FOR EACH ROW EXECUTE FUNCTION audit_verifikation();
 CREATE TRIGGER trg_audit_verifikation_upd AFTER UPDATE ON public.verifikationer FOR EACH ROW EXECUTE FUNCTION audit_verifikation();
 CREATE TRIGGER trg_forbjud_ver_delete BEFORE DELETE ON public.verifikationer FOR EACH ROW EXECUTE FUNCTION forbjud_bokford_radering();
+CREATE TRIGGER trg_immutabel_verifikation BEFORE UPDATE ON public.verifikationer FOR EACH ROW EXECUTE FUNCTION enforce_immutabel_verifikation();
 CREATE TRIGGER trg_journalfor_andring AFTER UPDATE OF status ON public.verifikationer FOR EACH ROW EXECUTE FUNCTION journalfor_verifikationsandring();
 CREATE TRIGGER trg_makulerad_skydd BEFORE DELETE OR UPDATE ON public.verifikationer FOR EACH ROW EXECUTE FUNCTION protect_makulerad_verifikation();
 CREATE TRIGGER trg_notify_verifikation_created AFTER INSERT ON public.verifikationer FOR EACH ROW EXECUTE FUNCTION notify_on_verifikation_created();

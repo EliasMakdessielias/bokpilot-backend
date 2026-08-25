@@ -2108,11 +2108,17 @@ begin
     v_rad := new; v_action := 'radera';
     new.raderad_av := auth.uid();
   end if;
-  insert into audit_log (company_id, entity, entity_ref, action, old_data, changed_by, source)
-  values (v_rad.company_id, 'arkiv_fil', v_rad.id::text, v_action,
-          jsonb_build_object('file_name', v_rad.file_name, 'mapp_id', v_rad.mapp_id,
-                             'document_id', v_rad.document_id, 'kalla', v_rad.kalla),
-          auth.uid(), 'ui');
+
+  begin
+    insert into audit_log (company_id, entity, entity_ref, action, old_data, changed_by, source)
+    values (v_rad.company_id, 'arkiv_fil', v_rad.id::text, v_action,
+            jsonb_build_object('file_name', v_rad.file_name, 'mapp_id', v_rad.mapp_id,
+                               'document_id', v_rad.document_id, 'kalla', v_rad.kalla),
+            auth.uid(), 'ui');
+  exception when foreign_key_violation then
+    null;   -- bolaget raderas (cascade) - auditraden skulle ända bort med det
+  end;
+
   if tg_op = 'DELETE' then return old; end if;
   return new;
 end $function$
@@ -2125,6 +2131,11 @@ CREATE OR REPLACE FUNCTION public.arkiv_mapp_fore_radering()
  SET search_path TO 'public'
 AS $function$
 begin
+
+  -- Sanktionerad avveckling av hela bolaget (se avveckla_bolag): spärren gäller inte.
+  if tg_op = 'DELETE' and current_setting('app.bfl_avveckla', true) = 'on' then
+    return OLD;
+  end if;
   if not exists (select 1 from companies where id = old.company_id) then
     return old;
   end if;
@@ -2254,6 +2265,11 @@ CREATE OR REPLACE FUNCTION public.arkiv_skydda_rakenskapsinfo()
 AS $function$
 declare v_kalla text; v_namn text;
 begin
+
+  -- Sanktionerad avveckling av hela bolaget (se avveckla_bolag): spärren gäller inte.
+  if tg_op = 'DELETE' and current_setting('app.bfl_avveckla', true) = 'on' then
+    return OLD;
+  end if;
   if tg_op = 'DELETE' then
     v_kalla := old.kalla; v_namn := old.file_name;
   else
@@ -2501,6 +2517,73 @@ begin
   end;
 
   return case when tg_op = 'DELETE' then old else new end;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.avveckla_bolag(p_company uuid, p_orsak text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_namn text; v_orgnr text; v_innehall jsonb := '{}'::jsonb; r record; n bigint;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'ATKOMST_NEKAD: Endast plattformsadministratör kan avveckla ett bolag.';
+  end if;
+  if nullif(trim(coalesce(p_orsak, '')), '') is null then
+    raise exception 'FEL: Ange en orsak till avvecklingen. Den loggas permanent och går inte att ändra i efterhand.';
+  end if;
+
+  select name, org_nr into v_namn, v_orgnr from public.companies where id = p_company;
+  if v_namn is null then
+    raise exception 'FEL: Bolaget finns inte.';
+  end if;
+
+  -- Sammanställ omfattningen INNAN något raderas, för den permanenta loggen.
+  for r in
+    select * from (values
+      ('verifikationer'), ('verifikation_andringar'), ('documents'), ('invoices'),
+      ('supplier_invoices'), ('bank_transactions'), ('vat_reports'), ('lonekorningar'),
+      ('lonebesked'), ('salaries'), ('agi_deklarationer'), ('accounts'),
+      ('kyc_assessments'), ('aml_flags')
+    ) as t(tabell)
+  loop
+    if to_regclass('public.' || r.tabell) is not null then
+      execute format('select count(*) from public.%I where company_id = $1', r.tabell)
+        into n using p_company;
+      if n > 0 then v_innehall := v_innehall || jsonb_build_object(r.tabell, n); end if;
+    end if;
+  end loop;
+
+  perform public.log_platform_audit(
+    'company_decommissioned', p_company::text,
+    jsonb_build_object('namn', v_namn, 'org_nr', v_orgnr,
+                       'orsak', left(trim(p_orsak), 500),
+                       'innehall_vid_radering', v_innehall,
+                       'lagrum', 'BFL 7 kap. 2 §'));
+
+  perform set_config('app.bfl_avveckla', 'on', true);
+  perform set_config('app.periodlas_bypass', 'on', true);
+
+  -- Relationer som inte kaskaderar. Ordningen följer beroendena:
+  -- uppgifter före uppdrag, uppdrag före byråkopplingen.
+  delete from public.uppdragsuppgift where klient_bolag_id = p_company or byra_bolag_id = p_company;
+  delete from public.uppdrag         where klient_bolag_id = p_company or byra_bolag_id = p_company;
+  delete from public.byra_klient     where klient_bolag_id = p_company or byra_bolag_id = p_company;
+  delete from public.byra_medlemskap where byra_bolag_id = p_company;
+  delete from public.aml_flags       where company_id = p_company;
+  delete from public.kyc_assessments where company_id = p_company;
+  delete from public.kivra_utskick   where company_id = p_company;
+
+  delete from public.companies where id = p_company;
+
+  perform set_config('app.bfl_avveckla', 'off', true);
+  perform set_config('app.periodlas_bypass', 'off', true);
+
+  return jsonb_build_object('ok', true, 'bolag', v_namn, 'org_nr', v_orgnr,
+                            'raderat_innehall', v_innehall);
 end $function$
 ;
 
@@ -3590,6 +3673,48 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.cron_lagringsintegritet()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_res jsonb; n_saknade int; n_foraldralosa int; n_forra int;
+begin
+  v_res := public.kontrollera_lagringsintegritet();
+  n_saknade      := (v_res #>> '{saknade_filer,antal}')::int;
+  n_foraldralosa := (v_res #>> '{foraldralosa_filer,antal}')::int;
+
+  -- Farliga riktningen: databasrad utan fil = räkenskapsinformation kan vara borta.
+  if n_saknade > 0 then
+    perform public.report_system_error(
+      'lagringsintegritet',
+      format('%s underlag saknas i Storage men finns kvar i databasen. Räkenskapsinformation kan ha gått förlorad (BFL 7 kap. 2 §).', n_saknade),
+      null, 'critical', 'STORAGE_MISSING_FILES', v_res, now());
+  end if;
+
+  -- Ofarliga riktningen: fil utan databasrad. Spår endast vid förändring.
+  select (metadata #>> '{foraldralosa_filer,antal}')::int into n_forra
+  from public.system_error_log
+  where component = 'lagringsintegritet' and error_code = 'STORAGE_ORPHANS'
+  order by occurred_at desc limit 1;
+
+  if n_foraldralosa > 0 and n_foraldralosa is distinct from n_forra then
+    insert into public.system_error_log(component, message, severity, error_code, metadata, occurred_at)
+    values ('lagringsintegritet',
+            format('Antal föräldralösa filer i Storage ändrades från %s till %s. Ingen räkenskapsinformation förlorad, men filer utan databasrad bör gallras (GDPR art. 5.1 c och e).',
+                   coalesce(n_forra::text, 'okänt'), n_foraldralosa),
+            'info', 'STORAGE_ORPHANS', v_res, now());
+  end if;
+
+  perform public.record_worker_health('lagringsintegritet', true);
+exception when others then
+  perform public.record_worker_health('lagringsintegritet', false, left(sqlerrm, 300));
+  raise;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.cron_run_monthly_controls()
  RETURNS void
  LANGUAGE plpgsql
@@ -3683,6 +3808,11 @@ CREATE OR REPLACE FUNCTION public.enforce_company_write_lock()
 AS $function$
 declare v_company uuid;
 begin
+
+  -- Sanktionerad avveckling av hela bolaget (se avveckla_bolag): spärren gäller inte.
+  if tg_op = 'DELETE' and current_setting('app.bfl_avveckla', true) = 'on' then
+    return OLD;
+  end if;
   v_company := case when TG_OP = 'DELETE' then OLD.company_id else NEW.company_id end;
   if auth.uid() is not null and not public.can_company_write(v_company) then
     raise exception 'Tjänsten är pausad för detta företag. Kontakta BokPilot support.' using errcode = '42501';
@@ -3958,6 +4088,11 @@ CREATE OR REPLACE FUNCTION public.forbjud_bokford_faktura_radering()
  SET search_path TO 'public'
 AS $function$
 begin
+
+  -- Sanktionerad avveckling av hela bolaget (se avveckla_bolag): spärren gäller inte.
+  if tg_op = 'DELETE' and current_setting('app.bfl_avveckla', true) = 'on' then
+    return OLD;
+  end if;
   if old.bokford or old.verifikation_id is not null then
     raise exception 'Bokförda leverantörsfakturor raderas inte — makulera i stället (rättelse enligt bokföringslagen).';
   end if;
@@ -3994,6 +4129,54 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.forbjud_radera_bolag_med_rakenskapsinfo()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  r record; n bigint; v_fynd text[] := '{}';
+begin
+  -- Sanktionerad avveckling sätter flaggan; den sätts endast av avveckla_bolag().
+  if current_setting('app.bfl_avveckla', true) = 'on' then
+    return old;
+  end if;
+
+  for r in
+    select * from (values
+      ('verifikationer',        'bokförda verifikationer'),
+      ('verifikation_andringar','poster i rättelsejournalen'),
+      ('documents',             'underlag'),
+      ('invoices',              'kundfakturor'),
+      ('supplier_invoices',     'leverantörsfakturor'),
+      ('bank_transactions',     'bankhändelser'),
+      ('vat_reports',           'momsrapporter'),
+      ('lonekorningar',         'lönekörningar'),
+      ('lonebesked',            'lönebesked'),
+      ('salaries',              'löneposter'),
+      ('agi_deklarationer',     'AGI-deklarationer')
+    ) as t(tabell, etikett)
+  loop
+    if to_regclass('public.' || r.tabell) is not null then
+      execute format('select count(*) from public.%I where company_id = $1', r.tabell)
+        into n using old.id;
+      if n > 0 then
+        v_fynd := v_fynd || format('%s %s', n, r.etikett);
+      end if;
+    end if;
+  end loop;
+
+  if array_length(v_fynd, 1) > 0 then
+    raise exception
+      'BFL_SKYDD: Bolaget "%" kan inte raderas. Det innehåller räkenskapsinformation som ska bevaras i sju år efter utgången av det kalenderår då räkenskapsåret avslutades (BFL 7 kap. 2 §). Hittade: %. Ta en arkivexport först och avveckla därefter via avveckla_bolag(bolags_id, orsak), som loggar åtgärden permanent.',
+      old.name, array_to_string(v_fynd, ', ');
+  end if;
+
+  return old;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.forbjud_sista_admin_bort()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -4001,6 +4184,11 @@ CREATE OR REPLACE FUNCTION public.forbjud_sista_admin_bort()
  SET search_path TO ''
 AS $function$
 begin
+  -- Sanktionerad avveckling av hela bolaget: kravet på kvarvarande admin gäller inte.
+  if current_setting('app.bfl_avveckla', true) = 'on' then
+    return OLD;
+  end if;
+
   if OLD.role = 'admin'
      and not exists (
        select 1 from public.user_companies uc
@@ -4012,8 +4200,7 @@ begin
     raise exception 'SISTA_ADMIN: Bolaget måste ha minst en administratör. Utse en ny innan du tar bort den sista.';
   end if;
   return OLD;
-end;
-$function$
+end $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.gallra_gdpr_loggar()
@@ -4387,6 +4574,68 @@ begin
   where id = p_uppgift_id
   returning * into v_u;
   return v_u;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.kontrollera_lagringsintegritet()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_saknade jsonb; v_foraldralosa jsonb;
+  n_saknade int; n_foraldralosa int;
+begin
+  -- 1) Databasrader vars fil saknas i Storage
+  select coalesce(jsonb_agg(x), '[]'::jsonb), count(*)
+    into v_saknade, n_saknade
+  from (
+    select 'documents' as tabell, d.id::text as rad_id, d.company_id::text as bolag,
+           d.storage_path, d.verifikation_id is not null as ar_bokfort
+    from public.documents d
+    where d.storage_path is not null
+      and not exists (select 1 from storage.objects o
+                      where o.bucket_id = 'underlag' and o.name = d.storage_path)
+    union all
+    select 'arkiv_filer', f.id::text, f.company_id::text, f.storage_path, false
+    from public.arkiv_filer f
+    where f.storage_path is not null
+      and f.raderad_at is null
+      and not exists (select 1 from storage.objects o
+                      where o.bucket_id = 'arkiv' and o.name = f.storage_path)
+    limit 100
+  ) x;
+
+  -- 2) Filer i Storage utan databasrad
+  select coalesce(jsonb_agg(y), '[]'::jsonb), count(*)
+    into v_foraldralosa, n_foraldralosa
+  from (
+    select o.bucket_id, o.name as storage_path,
+           (storage.foldername(o.name))[1] as bolagsmapp,
+           exists (select 1 from public.companies c
+                   where c.id::text = (storage.foldername(o.name))[1]) as bolaget_finns
+    from storage.objects o
+    where o.bucket_id = 'underlag'
+      and not exists (select 1 from public.documents d where d.storage_path = o.name)
+    union all
+    select o.bucket_id, o.name, (storage.foldername(o.name))[1],
+           exists (select 1 from public.companies c where c.id::text = (storage.foldername(o.name))[1])
+    from storage.objects o
+    where o.bucket_id = 'arkiv'
+      and not exists (select 1 from public.arkiv_filer f where f.storage_path = o.name)
+    limit 100
+  ) y;
+
+  return jsonb_build_object(
+    'kontrollerad_at', now(),
+    'saknade_filer', jsonb_build_object('antal', n_saknade, 'poster', v_saknade),
+    'foraldralosa_filer', jsonb_build_object('antal', n_foraldralosa, 'poster', v_foraldralosa),
+    'summering', jsonb_build_object(
+      'documents', (select count(*) from public.documents where storage_path is not null),
+      'underlag_objekt', (select count(*) from storage.objects where bucket_id = 'underlag'),
+      'arkiv_filer', (select count(*) from public.arkiv_filer where storage_path is not null and raderad_at is null),
+      'arkiv_objekt', (select count(*) from storage.objects where bucket_id = 'arkiv')));
 end $function$
 ;
 
@@ -5112,6 +5361,11 @@ CREATE OR REPLACE FUNCTION public.protect_locked_account()
  SET search_path TO 'public'
 AS $function$
 begin
+
+  -- Sanktionerad avveckling av hela bolaget (se avveckla_bolag): spärren gäller inte.
+  if tg_op = 'DELETE' and current_setting('app.bfl_avveckla', true) = 'on' then
+    return OLD;
+  end if;
   if current_setting('app.allow_locked_change', true) = 'on' then
     return case when tg_op = 'DELETE' then old else new end;
   end if;
@@ -6886,20 +7140,18 @@ CREATE OR REPLACE FUNCTION public.skydda_sista_byra_admin()
  SET search_path TO 'public'
 AS $function$
 begin
-  if old.roll = 'admin' and old.aktiv
-     and (tg_op = 'DELETE' or new.roll <> 'admin' or not new.aktiv) then
-    -- Radlås byråns medlemskap: två samtidiga transaktioner kan annars
-    -- inaktivera varandras "sista admin" (TOCTOU).
-    perform 1 from byra_medlemskap where byra_bolag_id = old.byra_bolag_id for update;
-    if not exists (
-      select 1 from byra_medlemskap
-      where byra_bolag_id = old.byra_bolag_id and id <> old.id and aktiv and roll = 'admin'
-    ) then
-      raise exception 'Byråns sista administratör kan inte inaktiveras, nedgraderas eller tas bort';
-    end if;
+  if tg_op = 'DELETE' and current_setting('app.bfl_avveckla', true) = 'on' then
+    return OLD;
   end if;
-  if tg_op = 'DELETE' then return old; end if;
-  return new;
+  if OLD.roll = 'admin' and OLD.aktiv
+     and not exists (
+       select 1 from public.byra_medlemskap m
+       where m.byra_bolag_id = OLD.byra_bolag_id
+         and m.roll = 'admin' and m.aktiv and m.id <> OLD.id)
+  then
+    raise exception 'Byrån måste ha minst en aktiv administratör.';
+  end if;
+  return OLD;
 end $function$
 ;
 

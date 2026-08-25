@@ -1,7 +1,9 @@
--- pg_cron-jobb i bokpilot-sverige (vzeqvapebkbapwflozbi), dumpade 2026-08-20.
--- Referens — körs redan i databasen. Authorization-headern i jobb 4 och 5 är
--- projektets publika anon-nyckel; de hemliga cron-nycklarna läses ur
--- public.interna_nycklar vid körning och ingår inte i dumpen.
+-- pg_cron-jobb i bokpilot-sverige (vzeqvapebkbapwflozbi), dumpade 2026-08-25.
+-- Referens — körs redan i databasen. Authorization- och apikey-headern i jobb 4
+-- och 5 är projektets publicerbara nyckel (sb_publishable_...), som ersatte den
+-- tidigare anon-JWT:n vid nyckelrotationen; båda är publika till sin natur. De
+-- hemliga cron-nycklarna läses ur public.interna_nycklar vid körning och ingår
+-- inte i dumpen.
 
 -- jobid 1: bokpilot-scheduled-notifications, schema '0 6 * * *', aktiv
 select cron.schedule('bokpilot-scheduled-notifications', '0 6 * * *', $job$
@@ -25,7 +27,8 @@ select cron.schedule('kivra-sync-10min', '*/10 * * * *', $job$
     url := 'https://vzeqvapebkbapwflozbi.supabase.co/functions/v1/kivra-sync',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ6ZXF2YXBlYmtiYXB3ZmxvemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2ODQ0NzAsImV4cCI6MjA5OTI2MDQ3MH0.uI-gF2q7SIK57rJIglczsfSiDIYN3aQm6a-Vz1yZiqQ',
+      'Authorization', 'Bearer sb_publishable_vyR02gFIVZH9zY7RBRvX7Q_mBogzd00',
+      'apikey', 'sb_publishable_vyR02gFIVZH9zY7RBRvX7Q_mBogzd00',
       'x-kivra-cron-secret', (select varde from public.interna_nycklar where namn='kivra_cron')
     ),
     body := '{"cron": true}'::jsonb
@@ -38,7 +41,8 @@ select cron.schedule('byrastod-jobb-natt', '10 4 * * *', $job$
     url := 'https://vzeqvapebkbapwflozbi.supabase.co/functions/v1/byrastod-jobb',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ6ZXF2YXBlYmtiYXB3ZmxvemJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2ODQ0NzAsImV4cCI6MjA5OTI2MDQ3MH0.uI-gF2q7SIK57rJIglczsfSiDIYN3aQm6a-Vz1yZiqQ',
+      'Authorization', 'Bearer sb_publishable_vyR02gFIVZH9zY7RBRvX7Q_mBogzd00',
+      'apikey', 'sb_publishable_vyR02gFIVZH9zY7RBRvX7Q_mBogzd00',
       'x-byrastod-cron-secret', (select varde from public.interna_nycklar where namn = 'byrastod_cron')
     ),
     body := '{"cron": true}'::jsonb
@@ -48,3 +52,9 @@ $job$);
 -- jobid 6: gdpr-gallring-natt, schema '40 3 * * *', aktiv
 select cron.schedule('gdpr-gallring-natt', '40 3 * * *',
   $job$ select public.gallra_gdpr_loggar() $job$);
+
+-- jobid 7: lagringsintegritet-natt, schema '25 3 * * *', aktiv
+-- Etapp 9: jämför documents/arkiv_filer mot storage.objects åt båda hållen och
+-- larmar när en databasrad saknar sin fil i Storage.
+select cron.schedule('lagringsintegritet-natt', '25 3 * * *',
+  $job$ select public.cron_lagringsintegritet() $job$);

@@ -2,7 +2,7 @@
 
 Projekt: `bokpilot-sverige`, ref `vzeqvapebkbapwflozbi`, eu-north-1.
 
-Totalsiffror (public-schemat): **123 tabeller** (samtliga med RLS aktivt), **0 vyer**, **249 egna funktioner** (exkl. extension-ägda), **75 triggrar**, **160 RLS-policies**, **191 index** (som inte backar constraints), **70 migrationer**, **32 edge functions**, **6 pg_cron-jobb**, **5 storage-buckets**. (Uppdaterat 2026-08-25 efter etapp 4–7: search_path-låsning och anon-indragning, täckande FK-index, RLS-InitPlan-omskrivning, behörighetskoll utan uid-beroende samt indragna tabellrättigheter för anon.) Inga egna enum-typer. Enda schema med egna objekt är `public`.
+Totalsiffror (public-schemat): **123 tabeller** (samtliga med RLS aktivt), **0 vyer**, **253 egna funktioner** (exkl. extension-ägda), **76 triggrar**, **160 RLS-policies**, **191 index** (som inte backar constraints), **77 migrationer**, **32 edge functions**, **7 pg_cron-jobb**, **5 storage-buckets**. (Uppdaterat 2026-08-25 efter etapp 4–9: search_path-låsning och anon-indragning, täckande FK-index, RLS-InitPlan-omskrivning, behörighetskoll utan uid-beroende, indragna tabellrättigheter för anon, BFL-spärr vid bolagsradering samt nattlig avstämning mellan databas och Storage.) Inga egna enum-typer. Enda schema med egna objekt är `public`.
 
 Efter etapp 4 och 7 har `anon` **ingen åtkomst alls** till vårt schema: rollen kan varken exekvera någon egen funktion i `public` eller nå någon tabell. De 188 kvarvarande EXECUTE-rättigheterna avser uteslutande btree_gist-extensionens egna funktioner (`gbt_*`, `gbtreekey*`, `*_dist`), som inte tillhör vår kodbas, och tabellgrant-avsnittet i `schema/grants.sql` innehåller inte längre en enda anon-rad. `authenticated` är oförändrad (107 tabeller).
 
@@ -59,7 +59,7 @@ pg_net 0.20.3 (public), pg_cron 1.6.4, pgcrypto 1.3 (extensions), uuid-ossp 1.1 
 
 ## pg_cron-jobb
 
-Se `schema/cron_jobs.sql`. Sammanfattning: dagliga notifierings-/abonnemangsjobb (06:00, 06:15), månadskontroller (03:15), kivra-sync var 10:e minut, byråstöd nattjobb (04:10), GDPR-gallring (03:40).
+Se `schema/cron_jobs.sql`. Sammanfattning: dagliga notifierings-/abonnemangsjobb (06:00, 06:15), månadskontroller (03:15), kivra-sync var 10:e minut, byråstöd nattjobb (04:10), lagringsintegritet (03:25), GDPR-gallring (03:40).
 
 ## Tabeller (123, samtliga med RLS)
 
@@ -67,9 +67,9 @@ account_import_batches, accounts, agi_deklarationer, ai_bokforing_logg, ai_call_
 
 Största (total relationsstorlek): audit_log ~17 MB, accounts ~5,5 MB, documents ~232 kB, notification_queue ~200 kB, bas_accounts ~200 kB, mcp_audit_log ~184 kB.
 
-## Migrationer (70)
+## Migrationer (77)
 
-Från `20260710135627_bfl_skydd_v3_rpc_created_by` till `20260825142721_etapp_7_anon_utan_tabellrattigheter_v1`. Fullständig lista med en fil per migration i `supabase/migrations/`. Grupperna i historiken: BFL-skydd v3–v6 (2026-07-10), lager v1 (07-10), konsol/beta/byråstöd (07-11–07-14), räkenskapsårsregler + bokföringsassistent + lager etapp 2–3 (07-21), arkiv v1 + åtkomst/KYC/AML-scoping + SIE-import + BFL-skydd lön/levfaktura (07-25), etapp 1a/1b audit-triggrar + makuleringsfix (08-14), GDPR-gallring + bank_accounts-unikhet (08-17), etapp 2 spärr av bokföringsdata (08-24), etapp 3 åtkomst/rättelsejournal + audit-cascade-fixar (08-25), etapp 4 rättighetshärdning (08-25), etapp 5 prestanda: FK-index + RLS-InitPlan (08-25), etapp 6 behörighetskoll utan uid-beroende (08-25), etapp 7 anon utan tabellrättigheter (08-25).
+Från `20260710135627_bfl_skydd_v3_rpc_created_by` till `20260825161147_etapp_9_lagringsintegritet_foraldralosa_spar_v2`. Fullständig lista med en fil per migration i `supabase/migrations/`. Grupperna i historiken: BFL-skydd v3–v6 (2026-07-10), lager v1 (07-10), konsol/beta/byråstöd (07-11–07-14), räkenskapsårsregler + bokföringsassistent + lager etapp 2–3 (07-21), arkiv v1 + åtkomst/KYC/AML-scoping + SIE-import + BFL-skydd lön/levfaktura (07-25), etapp 1a/1b audit-triggrar + makuleringsfix (08-14), GDPR-gallring + bank_accounts-unikhet (08-17), etapp 2 spärr av bokföringsdata (08-24), etapp 3 åtkomst/rättelsejournal + audit-cascade-fixar (08-25), etapp 4 rättighetshärdning (08-25), etapp 5 prestanda: FK-index + RLS-InitPlan (08-25), etapp 6 behörighetskoll utan uid-beroende (08-25), etapp 7 anon utan tabellrättigheter (08-25), etapp 8 BFL-skydd vid bolagsradering (08-25), etapp 9 lagringsintegritet (08-25).
 
 Etapp 3-migrationerna (2026-08-25):
 
@@ -99,3 +99,39 @@ Etapp 6-migrationen (2026-08-25):
 Etapp 7-migrationen (2026-08-25):
 
 - `20260825142721_etapp_7_anon_utan_tabellrattigheter_v1` – `anon` fråntas samtliga tabellrättigheter på de 101 tabeller där rollen fortfarande hade full DML kvar sedan Supabases standardgrants, plus `alter default privileges ... revoke all on tables from anon` för framtida tabeller. RLS är därmed inte längre enda skyddet mot anonym åtkomst — rättigheten saknas nu redan innan policyn utvärderas. `authenticated` lämnas helt oförändrad.
+
+## Etapp 8 – BFL-spärr vid bolagsradering (2026-08-25)
+
+Utgångsläget: 72 tabeller har `on delete cascade` mot `companies(id)` — däribland `verifikationer`, `verifikation_andringar`, `documents` och `audit_log`. En enda `delete from companies` raderade alltså hela bokföringen **och** beviskedjan. Det enda som i praktiken stoppade det var sidoeffekter av andra spärrar (`forbjud_sista_admin_bort`, `forbjud_bokford_radering`); ett bolag utan verifikationer men med underlag, fakturor eller lönedata hade inget skydd alls.
+
+Etapp 8 inför ett uttryckligt, namngivet skydd på companies-nivå som gäller alla vägar in, inklusive `service_role` och SQL-editorn, samt en sanktionerad väg förbi det.
+
+**Spärren.** Triggerfunktionen `forbjud_radera_bolag_med_rakenskapsinfo()` (BEFORE DELETE på `companies`, triggern `trg_forbjud_radera_bolag_med_rakenskapsinfo`) räknar raderna i elva tabeller med räkenskapsinformation — verifikationer, rättelsejournal, underlag, kund- och leverantörsfakturor, bankhändelser, momsrapporter, lönekörningar, lönebesked, löneposter och AGI-deklarationer. Finns något av det avbryts raderingen med felkoden `BFL_SKYDD` och en uppräkning av vad som hittades, med hänvisning till bokföringslagen 7 kap. 2 § (sju års bevarandetid räknat från utgången av det kalenderår då räkenskapsåret avslutades).
+
+**Den sanktionerade vägen.** `avveckla_bolag(bolags_id uuid, orsak text)` kräver plattformsadministratör och en ifylld orsak, sammanställer omfattningen av det som ska försvinna, skriver en permanent post i `platform_audit_log` och genomför sedan raderingen med spärrarna tillfälligt undantagna. Funktionen har EXECUTE för `authenticated` (behörigheten kontrolleras inuti funktionen); triggerfunktionen är oanropbar för samtliga API-roller.
+
+**Varför `platform_audit_log` och inte `audit_log`.** `audit_log.company_id` har en FK med `on delete cascade` mot `companies`. En avvecklingspost skriven i `audit_log` skulle alltså raderas i samma transaktion som bolaget — loggen vore värdelös för just den händelse den ska dokumentera. `platform_audit_log` kaskaderar inte bort med bolaget och överlever därför avvecklingen.
+
+Undantaget styrs av sessionsflaggan `app.bfl_avveckla`, som bara sätts av `avveckla_bolag()` och alltid begränsas till `TG_OP = 'DELETE'` — insert och update påverkas inte, så spärrarnas egentliga syfte (att skydda levande bolags data) är intakt.
+
+- `20260825155819_etapp_8_bfl_skydd_vid_bolagsradering_v1` – spärren, triggern och `avveckla_bolag()`.
+- `20260825155920_etapp_8_avveckling_forbi_sista_admin_v1` – `forbjud_sista_admin_bort` blockerade även den sanktionerade avvecklingen via kaskaden till `user_companies`; kravet på kvarvarande administratör är meningslöst när hela bolaget avvecklas.
+- `20260825160109_etapp_8_avvecklingsundantag_i_ovriga_sparrar_v1` – fem spärrar respekterade inte `app.periodlas_bypass` och stoppade därför avvecklingen: `enforce_company_write_lock` (15 tabeller), `protect_locked_account`, `arkiv_skydda_rakenskapsinfo`, `arkiv_mapp_fore_radering` och `forbjud_bokford_faktura_radering`.
+- `20260825160249_etapp_8_avveckla_bolag_rensar_relationer_v2` – sju främmande nycklar mot `companies` har RESTRICT/NO ACTION och måste rensas uttryckligen och i rätt ordning: `uppdragsuppgift`, `uppdrag`, `byra_klient`, `byra_medlemskap`, `aml_flags`, `kyc_assessments`, `kivra_utskick`. AML/KYC har egna bevarandetider enligt penningtvättslagen som skiljer sig från BFL:s sju år, så omfattningen loggas innan posterna tas bort. Samtidigt får `skydda_sista_byra_admin` samma avvecklingsundantag.
+- `20260825160413_etapp_8_arkiv_audit_kaskadskydd_v1` – samma kaskadfälla som i etapp 3, nu i arkivlagret: `arkiv_fil_logga_radering` fångar specifikt `foreign_key_violation` (som bara kan betyda att bolaget försvinner) och släpper igenom den; allt annat avbryter fortfarande transaktionen.
+
+## Etapp 9 – lagringsintegritet (2026-08-25)
+
+Supabases databasbackuper omfattar **inte** objekt i Storage — databasen innehåller bara metadata (`documents.storage_path`, `arkiv_filer.storage_path`). Den farliga felmoden är därför tyst: en återställning ger en databas som ser komplett ut, med verifikationer, konteringsrader och dokumentrader, medan varje `storage_path` pekar på en fil som inte finns. Ingenting i systemet upptäckte det.
+
+`kontrollera_lagringsintegritet()` jämför båda hållen:
+
+- **Saknade filer** – databasrad finns, filen är borta. Räkenskapsinformation kan vara förlorad; larmas som `critical` med felkoden `STORAGE_MISSING_FILES`.
+- **Föräldralösa filer** – filen finns, ingen databasrad pekar på den. Ingen förlust, men en lagringsminimeringsfråga (GDPR art. 5.1 c och e). Rapporteras utan larm.
+
+`cron_lagringsintegritet()` kör kontrollen nattetid via pg_cron-jobbet `lagringsintegritet-natt` (`25 3 * * *`) och registrerar hjärtslag i `worker_health`, så att en funktion som slutar köra inte kan se ut som en frisk. Föräldralösa filer loggas i `system_error_log` **enbart när antalet ändras** — det finns i dag 21 kända sådana, och ett dagligt larm om ett statiskt tillstånd tränar bara bort uppmärksamheten. Raden skrivs direkt till tabellen och inte via `report_system_error`, eftersom den funktionen alltid eskalerar till en `urgent`-notis till samtliga plattformsadmins oavsett angiven severity.
+
+`kontrollera_lagringsintegritet` har EXECUTE för `authenticated`; `cron_lagringsintegritet` är låst till postgres/service_role.
+
+- `20260825160906_etapp_9_lagringsintegritet_v1` – båda funktionerna, rättigheterna och cron-jobbet.
+- `20260825161147_etapp_9_lagringsintegritet_foraldralosa_spar_v2` – rättelse: notisen om föräldralösa filer skickades tidigare in i `record_worker_health`, som rensar `last_error` vid lyckad körning och alltså kastade bort den omedelbart. Spåret flyttas till `system_error_log` och skrivs bara vid förändring.
