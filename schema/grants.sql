@@ -129,9 +129,9 @@
 -- grant delete, insert, references, select, trigger, truncate, update on public.kyc_arkiv to service_role;
 -- grant delete, insert, references, select, trigger, truncate, update on public.kyc_assessments to authenticated;
 -- grant delete, insert, references, select, trigger, truncate, update on public.kyc_assessments to service_role;
--- grant delete, insert, references, select, trigger, truncate, update on public.kyc_bilagor to authenticated;
+-- grant insert, select on public.kyc_bilagor to authenticated;
 -- grant delete, insert, references, select, trigger, truncate, update on public.kyc_bilagor to service_role;
--- grant delete, insert, references, select, trigger, truncate, update on public.kyc_huvudman to authenticated;
+-- grant insert, select, update on public.kyc_huvudman to authenticated;
 -- grant delete, insert, references, select, trigger, truncate, update on public.kyc_huvudman to service_role;
 -- grant delete, insert, references, select, trigger, truncate, update on public.lager_handelser to authenticated;
 -- grant delete, insert, references, select, trigger, truncate, update on public.lager_handelser to service_role;

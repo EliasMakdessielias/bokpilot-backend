@@ -6,7 +6,7 @@
 
 | Sökväg | Innehåll |
 |---|---|
-| `supabase/migrations/` | Alla 86 migrationer ur `supabase_migrations.schema_migrations`, en fil per migration (`<version>_<namn>.sql`), MD5-verifierade mot databasen |
+| `supabase/migrations/` | Alla 87 migrationer ur `supabase_migrations.schema_migrations`, en fil per migration (`<version>_<namn>.sql`), MD5-verifierade mot databasen |
 | `supabase/functions/<slug>/` | Källkod för alla 32 edge functions; delade moduler (claudeChat, ocr, serviceState, deadlines m.fl.) ligger i `supabase/functions/_shared/` så att `../_shared/`-importerna stämmer. Ingen edge function har uppdaterats sedan dumpen (senaste `updated_at` 2026-07-26) |
 | `schema/tables.sql` | CREATE TABLE för alla 127 tabeller i `public` (kolumner, defaults, not null) + RLS-aktivering |
 | | *Schemafilerna uppdaterade 2026-09-02 efter etapp 10–16 (backupunderlag, driftövervakning, rollstyrning på lönetabellerna, KYC-datamodell med bucket, KYC-bevakning, append-only operatörslogg, KYC-arkiv vid avveckling; 261 funktioner, 85 triggrar) — dessförinnan 2026-08-25 efter etapp 4–9 (search_path-låsning + anon-indragning, FK-index, RLS-InitPlan, behörighetskoll utan uid-beroende, anon utan tabellrättigheter, BFL-spärr vid bolagsradering, avstämning databas mot Storage)* |
