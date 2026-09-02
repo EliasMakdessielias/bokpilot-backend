@@ -60,8 +60,15 @@ Deno.serve(async (req) => {
     if (!user) return json({ error: 'Ej inloggad' }, 401)
 
     const db = createClient(SUPABASE_URL, SERVICE_KEY)
-    const { data: pa } = await db.from('platform_admins').select('email').ilike('email', user.email!)
-    if (!pa || !pa.length) return json({ error: 'Ingen åtkomst' }, 403)
+    // .ilike() är MÖNSTERMATCHNING, inte jämförelse: % och _ i anroparens egen
+    // e-postadress blev jokertecken, så en adress som _dmin@bokpilot.se matchade
+    // admin@bokpilot.se. Jämför i stället exakt och skiftlägesokänsligt, precis som
+    // databasens is_platform_admin() gör med lower(email) = lower(...).
+    const epost = (user.email || '').trim().toLowerCase()
+    if (!epost) return json({ error: 'Ingen åtkomst' }, 403)
+    const { data: pa } = await db.from('platform_admins').select('email')
+    const arAdmin = (pa || []).some(r => String(r.email || '').trim().toLowerCase() === epost)
+    if (!arAdmin) return json({ error: 'Ingen åtkomst' }, 403)
 
     const body = await req.json()
     const action = body?.action as string
@@ -205,8 +212,7 @@ Deno.serve(async (req) => {
         .select().single()
       if (bolagsFel) return json({ error: 'Kunde inte skapa bolaget: ' + bolagsFel.message }, 400)
 
-      // Bjud in ägaren via e-post (?valjlosenord=1: nya användaren väljer lösenord
-      // innan appen visas). Finns användaren redan kopplas den direkt.
+      // Bjud in ägaren via e-post. Finns användaren redan kopplas den direkt.
       let epost_status = 'inbjudan_skickad'
       let userId: string | null = null
       const { data: invited, error: invFel } = await db.auth.admin.inviteUserByEmail(epost, {
