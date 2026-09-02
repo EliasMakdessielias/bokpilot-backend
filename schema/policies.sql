@@ -1,7 +1,7 @@
 create policy "aib_insert" on public.account_import_batches for insert to public with check (((company_id IN ( SELECT user_company_ids() AS user_company_ids)) OR is_platform_admin()));
 create policy "aib_select" on public.account_import_batches for select to public using (((company_id IN ( SELECT user_company_ids() AS user_company_ids)) OR is_platform_admin()));
 create policy "accounts_policy" on public.accounts for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
-create policy "agi_deklarationer_policy" on public.agi_deklarationer for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
+create policy "agi_deklarationer_lon_policy" on public.agi_deklarationer for all to authenticated using ((company_id IN ( SELECT mina_lonebolag() AS mina_lonebolag))) with check ((company_id IN ( SELECT mina_lonebolag() AS mina_lonebolag)));
 create policy "ai_bokforing_logg_policy" on public.ai_bokforing_logg for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "ai_checklista_korningar_policy" on public.ai_checklista_korningar for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "ai_error_log_select" on public.ai_error_log for select to public using ((company_id IN ( SELECT user_companies.company_id
@@ -82,7 +82,7 @@ create policy "documents_policy" on public.documents for all to public using ((c
 create policy "dal_select" on public.download_audit_log for select to public using ((company_id IN ( SELECT user_companies.company_id
    FROM user_companies
   WHERE (user_companies.user_id = ( SELECT auth.uid() AS uid)))));
-create policy "employees_policy" on public.employees for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
+create policy "employees_lon_policy" on public.employees for all to authenticated using ((company_id IN ( SELECT mina_lonebolag() AS mina_lonebolag))) with check ((company_id IN ( SELECT mina_lonebolag() AS mina_lonebolag)));
 create policy "extraction_corrections_policy" on public.extraction_corrections for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "fiscal_years_policy" on public.fiscal_years for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "help_feedback_insert" on public.help_feedback for insert to public with check ((user_id = ( SELECT auth.uid() AS uid)));
@@ -106,15 +106,21 @@ create policy "kivra_utskick_select" on public.kivra_utskick for select to authe
 create policy "Kund kan bevilja supportsamtycke" on public.konsol_support_samtycken for insert to authenticated with check (((company_id IN ( SELECT user_company_ids() AS user_company_ids)) AND (beviljad_av_user_id = ( SELECT auth.uid() AS uid)) AND (beviljad_av_email = COALESCE((( SELECT auth.jwt() AS jwt) ->> 'email'::text), ''::text)) AND (giltig_till > now()) AND (giltig_till <= (now() + '30 days'::interval))));
 create policy "Kund kan läsa egna supportsamtycken" on public.konsol_support_samtycken for select to authenticated using ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "Kund kan återkalla supportsamtycke" on public.konsol_support_samtycken for update to authenticated using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
+create policy "kyc_arkiv_select" on public.kyc_arkiv for select to authenticated using ((is_platform_admin() OR (byra_bolag_ids && ARRAY( SELECT mina_byraer() AS mina_byraer))));
 create policy "kyc_insert_byra" on public.kyc_assessments for insert to authenticated with check ((company_id IN ( SELECT mina_klientbolag() AS mina_klientbolag)));
 create policy "kyc_select_byra" on public.kyc_assessments for select to authenticated using ((company_id IN ( SELECT mina_klientbolag() AS mina_klientbolag)));
 create policy "kyc_update_byra" on public.kyc_assessments for update to authenticated using ((company_id IN ( SELECT mina_klientbolag() AS mina_klientbolag))) with check ((company_id IN ( SELECT mina_klientbolag() AS mina_klientbolag)));
+create policy "kyc_bilagor_insert" on public.kyc_bilagor for insert to authenticated with check ((company_id IN ( SELECT mina_klientbolag() AS mina_klientbolag)));
+create policy "kyc_bilagor_select" on public.kyc_bilagor for select to authenticated using ((company_id IN ( SELECT mina_klientbolag() AS mina_klientbolag)));
+create policy "kyc_huvudman_insert" on public.kyc_huvudman for insert to authenticated with check ((company_id IN ( SELECT mina_klientbolag() AS mina_klientbolag)));
+create policy "kyc_huvudman_select" on public.kyc_huvudman for select to authenticated using ((company_id IN ( SELECT mina_klientbolag() AS mina_klientbolag)));
+create policy "kyc_huvudman_update" on public.kyc_huvudman for update to authenticated using ((company_id IN ( SELECT mina_klientbolag() AS mina_klientbolag))) with check ((company_id IN ( SELECT mina_klientbolag() AS mina_klientbolag)));
 create policy "lager_handelser_policy" on public.lager_handelser for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "lager_inventering_rader_policy" on public.lager_inventering_rader for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "lager_inventeringar_policy" on public.lager_inventeringar for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "lager_leveranser_policy" on public.lager_leveranser for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
-create policy "lonebesked_policy" on public.lonebesked for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
-create policy "lonekorningar_policy" on public.lonekorningar for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
+create policy "lonebesked_lon_policy" on public.lonebesked for all to authenticated using ((company_id IN ( SELECT mina_lonebolag() AS mina_lonebolag))) with check ((company_id IN ( SELECT mina_lonebolag() AS mina_lonebolag)));
+create policy "lonekorningar_lon_policy" on public.lonekorningar for all to authenticated using ((company_id IN ( SELECT mina_lonebolag() AS mina_lonebolag))) with check ((company_id IN ( SELECT mina_lonebolag() AS mina_lonebolag)));
 create policy "mcp_audit_insert_own" on public.mcp_audit_log for insert to authenticated with check ((user_id = ( SELECT auth.uid() AS uid)));
 create policy "mcp_audit_select" on public.mcp_audit_log for select to authenticated using (((user_id = ( SELECT auth.uid() AS uid)) OR (company_id IN ( SELECT user_company_ids() AS user_company_ids))));
 create policy "mcp_tokens_insert_own" on public.mcp_confirm_tokens for insert to authenticated with check ((user_id = ( SELECT auth.uid() AS uid)));
@@ -144,7 +150,7 @@ create policy "robo_conv_select" on public.robo_bp_conversations for select to p
 create policy "robo_msg_select" on public.robo_bp_messages for select to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "robo_rules_select" on public.robo_bp_rules for select to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "robo_bp_settings_sel" on public.robo_bp_settings for select to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
-create policy "salaries_policy" on public.salaries for all to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
+create policy "salaries_lon_policy" on public.salaries for all to authenticated using ((company_id IN ( SELECT mina_lonebolag() AS mina_lonebolag))) with check ((company_id IN ( SELECT mina_lonebolag() AS mina_lonebolag)));
 create policy "sie_imports_insert" on public.sie_imports for insert to public with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "sie_imports_select" on public.sie_imports for select to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));
 create policy "sie_imports_update" on public.sie_imports for update to public using ((company_id IN ( SELECT user_company_ids() AS user_company_ids))) with check ((company_id IN ( SELECT user_company_ids() AS user_company_ids)));

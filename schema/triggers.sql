@@ -46,6 +46,8 @@ CREATE TRIGGER trg_notify_bookkeeping_suggestion AFTER UPDATE ON public.document
 CREATE TRIGGER trg_notify_inbound_document AFTER INSERT ON public.documents FOR EACH ROW EXECUTE FUNCTION notify_on_inbound_document();
 CREATE TRIGGER trg_skydda_underlag BEFORE DELETE OR UPDATE ON public.documents FOR EACH ROW EXECUTE FUNCTION skydda_bokfort_underlag();
 CREATE TRIGGER trg_write_lock BEFORE INSERT OR DELETE OR UPDATE ON public.documents FOR EACH ROW EXECUTE FUNCTION enforce_company_write_lock();
+-- tabell: employees
+CREATE TRIGGER trg_audit_personuppgifter AFTER INSERT OR DELETE OR UPDATE ON public.employees FOR EACH ROW EXECUTE FUNCTION audit_personuppgifter();
 -- tabell: fiscal_years
 CREATE TRIGGER trg_skydda_rakenskapsar BEFORE DELETE OR UPDATE ON public.fiscal_years FOR EACH ROW EXECUTE FUNCTION skydda_rakenskapsar();
 CREATE TRIGGER trg_write_lock BEFORE INSERT OR DELETE OR UPDATE ON public.fiscal_years FOR EACH ROW EXECUTE FUNCTION enforce_company_write_lock();
@@ -56,12 +58,26 @@ CREATE TRIGGER trg_write_lock BEFORE INSERT OR DELETE OR UPDATE ON public.invoic
 -- tabell: invoices
 CREATE TRIGGER trg_audit_customer_invoice_booked AFTER INSERT OR UPDATE OF verifikation_id ON public.invoices FOR EACH ROW EXECUTE FUNCTION audit_customer_invoice_booked();
 CREATE TRIGGER trg_write_lock BEFORE INSERT OR DELETE OR UPDATE ON public.invoices FOR EACH ROW EXECUTE FUNCTION enforce_company_write_lock();
+-- tabell: konsol_audit_logg
+CREATE TRIGGER trg_konsol_audit_appendonly BEFORE DELETE OR UPDATE ON public.konsol_audit_logg FOR EACH ROW EXECUTE FUNCTION konsol_audit_appendonly();
+CREATE TRIGGER trg_konsol_audit_no_truncate BEFORE TRUNCATE ON public.konsol_audit_logg FOR EACH STATEMENT EXECUTE FUNCTION konsol_audit_appendonly();
+-- tabell: kyc_arkiv
+CREATE TRIGGER trg_kyc_arkiv_no_truncate BEFORE TRUNCATE ON public.kyc_arkiv FOR EACH STATEMENT EXECUTE FUNCTION kyc_arkiv_skydd();
+CREATE TRIGGER trg_kyc_arkiv_skydd BEFORE DELETE OR UPDATE ON public.kyc_arkiv FOR EACH ROW EXECUTE FUNCTION kyc_arkiv_skydd();
+-- tabell: kyc_assessments
+CREATE TRIGGER trg_audit_personuppgifter AFTER INSERT OR DELETE OR UPDATE ON public.kyc_assessments FOR EACH ROW EXECUTE FUNCTION audit_personuppgifter();
+-- tabell: kyc_bilagor
+CREATE TRIGGER trg_audit_personuppgifter AFTER INSERT OR DELETE OR UPDATE ON public.kyc_bilagor FOR EACH ROW EXECUTE FUNCTION audit_personuppgifter();
+-- tabell: kyc_huvudman
+CREATE TRIGGER trg_audit_personuppgifter AFTER INSERT OR DELETE OR UPDATE ON public.kyc_huvudman FOR EACH ROW EXECUTE FUNCTION audit_personuppgifter();
 -- tabell: lager_handelser
 CREATE TRIGGER trg_lager_handelser_appendonly BEFORE DELETE OR UPDATE ON public.lager_handelser FOR EACH ROW EXECUTE FUNCTION lager_handelser_appendonly();
 -- tabell: lager_inventering_rader
 CREATE TRIGGER trg_lager_inventering_rader_last BEFORE DELETE OR UPDATE ON public.lager_inventering_rader FOR EACH ROW EXECUTE FUNCTION lager_inventering_last();
 -- tabell: lager_inventeringar
 CREATE TRIGGER trg_lager_inventering_last BEFORE DELETE OR UPDATE ON public.lager_inventeringar FOR EACH ROW EXECUTE FUNCTION lager_inventering_last();
+-- tabell: lonebesked
+CREATE TRIGGER trg_audit_personuppgifter AFTER INSERT OR DELETE OR UPDATE ON public.lonebesked FOR EACH ROW EXECUTE FUNCTION audit_personuppgifter();
 -- tabell: lonekorningar
 CREATE TRIGGER trg_forbjud_bokford_lonekorning_radering BEFORE DELETE ON public.lonekorningar FOR EACH ROW EXECUTE FUNCTION forbjud_bokford_lonekorning_radering();
 -- tabell: products

@@ -1,4 +1,4 @@
--- pg_cron-jobb i bokpilot-sverige (vzeqvapebkbapwflozbi), dumpade 2026-08-25.
+-- pg_cron-jobb i bokpilot-sverige (vzeqvapebkbapwflozbi), dumpade 2026-09-02.
 -- Referens — körs redan i databasen. Authorization- och apikey-headern i jobb 4
 -- och 5 är projektets publicerbara nyckel (sb_publishable_...), som ersatte den
 -- tidigare anon-JWT:n vid nyckelrotationen; båda är publika till sin natur. De
@@ -58,3 +58,17 @@ select cron.schedule('gdpr-gallring-natt', '40 3 * * *',
 -- larmar när en databasrad saknar sin fil i Storage.
 select cron.schedule('lagringsintegritet-natt', '25 3 * * *',
   $job$ select public.cron_lagringsintegritet() $job$);
+
+-- jobid 8: driftkontroll-natt, schema '50 3 * * *', aktiv
+-- Etapp 11: nattlig driftvakt. Läser driftstatus() för komponenterna i
+-- public.driftkomponenter och larmar bara när en komponents status har ändrats.
+select cron.schedule('driftkontroll-natt', '50 3 * * *',
+  $job$ select public.cron_driftkontroll() $job$);
+
+-- jobid 10: kyc-bevakning-natt, schema '30 3 * * *', aktiv
+-- Etapp 14: bevakar kundkännedomens giltighet per aktiv byråklient och skriver
+-- aml_flags av typ kyc_saknas. Schemalades i etapp 14 som jobid 9 (04:35) och
+-- flyttades i etapp 14b till 03:30, före driftvakten; jobid 9 är avregistrerat
+-- och finns inte längre i cron.job.
+select cron.schedule('kyc-bevakning-natt', '30 3 * * *',
+  $job$ select public.cron_kyc_bevakning() $job$);

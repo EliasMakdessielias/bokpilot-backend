@@ -2398,6 +2398,36 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.audit_personuppgifter()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_ref text; v_company uuid; v_andrade text[];
+begin
+  if tg_op = 'DELETE' then
+    v_ref := old.id::text; v_company := old.company_id;
+  else
+    v_ref := new.id::text; v_company := new.company_id;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    select array_agg(n.key order by n.key) into v_andrade
+    from jsonb_each(to_jsonb(new)) n
+    where n.value is distinct from (to_jsonb(old) -> n.key);
+  end if;
+
+  perform public.log_accounting_audit(
+    lower(tg_op), tg_table_name, v_ref, 'trigger',
+    jsonb_build_object('personuppgifter', true,
+                       'andrade_kolumner', coalesce(v_andrade, '{}'::text[])),
+    v_company, null, null);
+
+  return coalesce(new, old);
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.audit_supplier_invoice_booked()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2528,6 +2558,7 @@ CREATE OR REPLACE FUNCTION public.avveckla_bolag(p_company uuid, p_orsak text)
 AS $function$
 declare
   v_namn text; v_orgnr text; v_innehall jsonb := '{}'::jsonb; r record; n bigint;
+  v_arkiv uuid; v_bevaras date;
 begin
   if not public.is_platform_admin() then
     raise exception 'ATKOMST_NEKAD: Endast plattformsadministratör kan avveckla ett bolag.';
@@ -2564,6 +2595,29 @@ begin
                        'innehall_vid_radering', v_innehall,
                        'lagrum', 'BFL 7 kap. 2 §'));
 
+  -- PTL 5 kap. 3 §: kundkännedomen fryses i kyc_arkiv innan raderna måste bort.
+  if exists (select 1 from public.kyc_assessments where company_id = p_company) then
+    v_bevaras := (current_date + interval '5 years')::date;
+    insert into public.kyc_arkiv (
+      bolag_id_ursprung, bolag_namn, org_nr, byra_bolag_ids,
+      affarsforbindelse_avslutad_at, bevaras_till, avvecklad_av, orsak,
+      kyc_assessments, kyc_huvudman, kyc_bilagor, aml_flags)
+    values (
+      p_company, v_namn, v_orgnr,
+      coalesce((select array_agg(distinct bk.byra_bolag_id) from public.byra_klient bk where bk.klient_bolag_id = p_company), '{}'),
+      now(), v_bevaras, auth.uid(), left(trim(p_orsak), 500),
+      (select coalesce(jsonb_agg(to_jsonb(k) order by k.created_at), '[]'::jsonb) from public.kyc_assessments k where k.company_id = p_company),
+      (select coalesce(jsonb_agg(to_jsonb(h) order by h.created_at), '[]'::jsonb) from public.kyc_huvudman h where h.company_id = p_company),
+      (select coalesce(jsonb_agg(to_jsonb(b) order by b.created_at), '[]'::jsonb) from public.kyc_bilagor b where b.company_id = p_company),
+      (select coalesce(jsonb_agg(to_jsonb(f) order by f.created_at), '[]'::jsonb) from public.aml_flags f where f.company_id = p_company))
+    returning id into v_arkiv;
+
+    perform public.log_platform_audit(
+      'kyc_archived', p_company::text,
+      jsonb_build_object('kyc_arkiv_id', v_arkiv, 'bevaras_till', v_bevaras,
+                         'lagrum', 'PTL 5 kap. 3 §'));
+  end if;
+
   perform set_config('app.bfl_avveckla', 'on', true);
   perform set_config('app.periodlas_bypass', 'on', true);
 
@@ -2583,7 +2637,8 @@ begin
   perform set_config('app.periodlas_bypass', 'off', true);
 
   return jsonb_build_object('ok', true, 'bolag', v_namn, 'org_nr', v_orgnr,
-                            'raderat_innehall', v_innehall);
+                            'raderat_innehall', v_innehall,
+                            'kyc_arkiv_id', v_arkiv, 'kyc_bevaras_till', v_bevaras);
 end $function$
 ;
 
@@ -3673,6 +3728,108 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.cron_driftkontroll()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  r record; forandringar text := ''; antal_daliga int := 0;
+begin
+  for r in select * from public.driftstatus() loop
+    if r.status <> 'OK' then
+      antal_daliga := antal_daliga + 1;
+    end if;
+
+    if r.status is distinct from (select senast_rapporterad_status
+                                    from public.driftkomponenter where namn = r.namn) then
+      forandringar := forandringar || format(E'%s: %s -> %s (%s)\n',
+        r.namn,
+        coalesce((select senast_rapporterad_status from public.driftkomponenter where namn = r.namn), 'okand'),
+        r.status, r.detalj);
+      update public.driftkomponenter set senast_rapporterad_status = r.status where namn = r.namn;
+    end if;
+  end loop;
+
+  if forandringar <> '' then
+    perform public.report_system_error(
+      'driftkontroll',
+      format('Driftstatus har ändrats för %s komponent(er). %s av %s är inte OK.',
+             (length(forandringar) - length(replace(forandringar, chr(10), ''))),
+             antal_daliga,
+             (select count(*) from public.driftkomponenter where aktiv)),
+      null,
+      case when antal_daliga > 0 then 'error' else 'info' end,
+      'DRIFT_STATUS_ANDRAD',
+      jsonb_build_object('forandringar', forandringar,
+                         'full_status', (select jsonb_agg(to_jsonb(d)) from public.driftstatus() d)),
+      now());
+  end if;
+
+  perform public.record_worker_health('driftkontroll', true);
+exception when others then
+  perform public.record_worker_health('driftkontroll', false, left(sqlerrm, 300));
+  raise;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.cron_kyc_bevakning()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  r record; n_nya int := 0; v_giltig date; v_dagar int;
+begin
+  for r in
+    select bk.klient_bolag_id as company_id, c.name
+    from public.byra_klient bk
+    join public.companies c on c.id = bk.klient_bolag_id
+    where bk.status = 'aktiv'
+  loop
+    select k.giltig_till into v_giltig
+    from public.kyc_assessments k
+    where k.company_id = r.company_id and k.status = 'godkand'
+    order by k.beslutad_at desc nulls last, k.created_at desc
+    limit 1;
+
+    if not found then
+      -- Ingen godkänd bedömning alls. En flagga per månad så länge det består.
+      insert into public.aml_flags (company_id, typ, allvarlighet, beskrivning, dedup_nyckel)
+      values (r.company_id, 'kyc_saknas', 'hog',
+              'Ingen godkänd kundkännedomsbedömning finns för bolaget. Kundkännedom ska vara genomförd innan affärsförbindelsen inleds (PTL 3 kap. 4 §).',
+              'kyc_saknas:' || to_char(current_date, 'YYYY-MM'))
+      on conflict (company_id, dedup_nyckel) do nothing;
+      if found then n_nya := n_nya + 1; end if;
+
+    elsif v_giltig is not null and v_giltig < current_date then
+      insert into public.aml_flags (company_id, typ, allvarlighet, beskrivning, dedup_nyckel)
+      values (r.company_id, 'kyc_saknas', 'hog',
+              format('Kundkännedomen löpte ut %s. Förnya bedömningen — fortlöpande uppföljning krävs (PTL 3 kap. 13 §).', v_giltig),
+              'kyc_utgangen:' || v_giltig)
+      on conflict (company_id, dedup_nyckel) do nothing;
+      if found then n_nya := n_nya + 1; end if;
+
+    elsif v_giltig is not null and v_giltig <= current_date + 30 then
+      v_dagar := v_giltig - current_date;
+      insert into public.aml_flags (company_id, typ, allvarlighet, beskrivning, dedup_nyckel)
+      values (r.company_id, 'kyc_saknas', 'normal',
+              format('Kundkännedomen löper ut %s (om %s dagar). Planera förnyelse.', v_giltig, v_dagar),
+              'kyc_utgar:' || v_giltig)
+      on conflict (company_id, dedup_nyckel) do nothing;
+      if found then n_nya := n_nya + 1; end if;
+    end if;
+  end loop;
+
+  perform public.record_worker_health('kyc_bevakning', true);
+exception when others then
+  perform public.record_worker_health('kyc_bevakning', false, left(sqlerrm, 300));
+  raise;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.cron_lagringsintegritet()
  RETURNS void
  LANGUAGE plpgsql
@@ -3797,6 +3954,67 @@ begin
   delete from public.accounts where company_id=p_company and account_nr=p_account_nr;
   return jsonb_build_object('deleted', true);
 end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.driftstatus()
+ RETURNS TABLE(namn text, typ text, status text, detalj text, senast timestamp with time zone)
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  -- Schemalagda jobb
+  select k.namn, k.typ,
+         case
+           when j.jobid is null then 'SAKNAS'
+           when not j.active   then 'AVSTANGD'
+           when d.senaste_ok is null then 'ALDRIG_LYCKATS'
+           when d.senaste_status <> 'succeeded' then 'FEL'
+           when k.max_tyst_timmar is not null
+                and d.senaste_ok < now() - make_interval(hours => k.max_tyst_timmar) then 'TYST'
+           else 'OK'
+         end,
+         case
+           when j.jobid is null then 'Cronjobbet finns inte i cron.job'
+           when not j.active then 'Jobbet är avstängt'
+           when d.senaste_ok is null then 'Har aldrig lyckats'
+           when d.senaste_status <> 'succeeded' then 'Senaste körning: ' || d.senaste_status
+                || coalesce(' - ' || left(d.senaste_meddelande, 120), '')
+           else 'Senaste lyckade körning för ' || (now() - d.senaste_ok)::interval(0)::text || ' sedan'
+         end,
+         d.senaste_ok
+  from public.driftkomponenter k
+  left join cron.job j on j.jobname = k.namn
+  left join lateral (
+    select max(r.end_time) filter (where r.status = 'succeeded') as senaste_ok,
+           (array_agg(r.status      order by r.end_time desc))[1] as senaste_status,
+           (array_agg(r.return_message order by r.end_time desc))[1] as senaste_meddelande
+    from cron.job_run_details r where r.jobid = j.jobid
+  ) d on true
+  where k.aktiv and k.typ = 'cron'
+
+  union all
+
+  -- Händelsestyrda komponenter
+  select k.namn, k.typ,
+         case
+           when w.component is null then 'OKAND'
+           when w.consecutive_failures >= k.max_fel_i_rad then 'FEL'
+           when w.last_success_at is null then 'ALDRIG_LYCKATS'
+           else 'OK'
+         end,
+         case
+           when w.component is null then 'Har aldrig rapporterat status'
+           when w.consecutive_failures >= k.max_fel_i_rad then
+             w.consecutive_failures || ' fel i rad' || coalesce(' - ' || left(w.last_error, 120), '')
+           when w.last_success_at is null then
+             'Har aldrig lyckats' || coalesce('. Senaste fel: ' || left(w.last_error, 100), '')
+           else 'Senast OK för ' || (now() - w.last_success_at)::interval(0)::text || ' sedan'
+         end,
+         w.last_success_at
+  from public.driftkomponenter k
+  left join public.worker_health w on w.component = k.namn
+  where k.aktiv and k.typ = 'handelsestyrd'
 $function$
 ;
 
@@ -4577,6 +4795,25 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.konsol_audit_appendonly()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if tg_op = 'UPDATE'
+     and old.company_id is not null
+     and new.company_id is null
+     and (to_jsonb(new) - 'company_id') = (to_jsonb(old) - 'company_id') then
+    return new;
+  end if;
+  raise exception
+    'KONSOL_LOGG_APPENDONLY: operatörsloggen är append-only — % är inte tillåtet. Behandlingshistorik ska bevaras (BFL 5 kap. 11 §).',
+    lower(tg_op);
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.kontrollera_lagringsintegritet()
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4636,6 +4873,29 @@ begin
       'underlag_objekt', (select count(*) from storage.objects where bucket_id = 'underlag'),
       'arkiv_filer', (select count(*) from public.arkiv_filer where storage_path is not null and raderad_at is null),
       'arkiv_objekt', (select count(*) from storage.objects where bucket_id = 'arkiv')));
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.kyc_arkiv_skydd()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if tg_op = 'UPDATE' then
+    if new.bevaras_till > old.bevaras_till
+       and (to_jsonb(new) - 'bevaras_till') = (to_jsonb(old) - 'bevaras_till') then
+      return new;
+    end if;
+    raise exception 'KYC_ARKIV_SKYDD: arkiverad kundkännedom kan inte ändras — endast bevarandetiden får förlängas (PTL 5 kap. 3–4 §§).';
+  elsif tg_op = 'DELETE' then
+    if old.bevaras_till < current_date then
+      return old;
+    end if;
+    raise exception 'KYC_ARKIV_SKYDD: bevarandetiden löper till % — radering nekad (PTL 5 kap. 3 §).', old.bevaras_till;
+  end if;
+  raise exception 'KYC_ARKIV_SKYDD: % nekad.', tg_op;
 end $function$
 ;
 
@@ -4721,6 +4981,24 @@ begin
     order by case t.priority when 'urgent' then 0 when 'high' then 1 when 'normal' then 2 else 3 end, t.last_message_at desc nulls last
     limit 200) r), '[]'::jsonb);
 end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.lista_lagringsobjekt()
+ RETURNS TABLE(bucket text, sokvag text, storlek bigint, mimetyp text, etag text, andrad timestamp with time zone)
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select o.bucket_id::text,
+         o.name::text,
+         (o.metadata->>'size')::bigint,
+         o.metadata->>'mimetype',
+         coalesce(o.metadata->>'eTag', o.version::text),
+         o.updated_at
+  from storage.objects o
+  where o.bucket_id in ('underlag', 'arkiv', 'annual-report-exports', 'support')
+  order by o.bucket_id, o.name;
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.log_accounting_audit(p_action text, p_entity text, p_entity_ref text, p_source text DEFAULT NULL::text, p_metadata jsonb DEFAULT NULL::jsonb, p_company_id uuid DEFAULT NULL::uuid, p_before jsonb DEFAULT NULL::jsonb, p_after jsonb DEFAULT NULL::jsonb)
@@ -5009,6 +5287,19 @@ CREATE OR REPLACE FUNCTION public.mina_klientbolag()
 AS $function$
   select bk.klient_bolag_id from public.byra_klient bk
   where bk.status = 'aktiv' and bk.byra_bolag_id in (select public.mina_byraer())
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.mina_lonebolag()
+ RETURNS SETOF uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select uc.company_id
+  from public.user_companies uc
+  where uc.user_id = auth.uid()
+    and (uc.role = 'admin' or 'lon' = any(coalesce(uc.moduler, '{}'::text[])));
 $function$
 ;
 

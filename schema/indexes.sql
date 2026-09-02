@@ -103,7 +103,13 @@ CREATE INDEX konsol_audit_created_idx ON public.konsol_audit_logg USING btree (c
 CREATE INDEX konsol_kundanteckningar_company_idx ON public.konsol_kundanteckningar USING btree (company_id, created_at DESC);
 CREATE INDEX konsol_livscykel_company_idx ON public.konsol_livscykel_steg USING btree (company_id);
 CREATE INDEX konsol_support_samtycken_company_idx ON public.konsol_support_samtycken USING btree (company_id, giltig_till DESC);
+CREATE INDEX kyc_arkiv_bevaras_idx ON public.kyc_arkiv USING btree (bevaras_till);
+CREATE INDEX kyc_arkiv_byra_idx ON public.kyc_arkiv USING gin (byra_bolag_ids);
 CREATE INDEX kyc_assessments_company_idx ON public.kyc_assessments USING btree (company_id, created_at DESC);
+CREATE INDEX idx_kyc_bilagor_company_id ON public.kyc_bilagor USING btree (company_id);
+CREATE INDEX idx_kyc_bilagor_kyc_id ON public.kyc_bilagor USING btree (kyc_id);
+CREATE INDEX idx_kyc_huvudman_company_id ON public.kyc_huvudman USING btree (company_id);
+CREATE INDEX idx_kyc_huvudman_kyc_id ON public.kyc_huvudman USING btree (kyc_id);
 CREATE INDEX idx_lager_handelser_inventering_id ON public.lager_handelser USING btree (inventering_id);
 CREATE INDEX idx_lager_handelser_invoice_id ON public.lager_handelser USING btree (invoice_id);
 CREATE INDEX idx_lager_handelser_product_id ON public.lager_handelser USING btree (product_id);

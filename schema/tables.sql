@@ -855,6 +855,19 @@ create table public.download_audit_log (
 
 alter table public.download_audit_log enable row level security;
 
+create table public.driftkomponenter (
+  namn text not null,
+  typ text not null,
+  max_tyst_timmar integer,
+  max_fel_i_rad integer default 3 not null,
+  beskrivning text,
+  aktiv boolean default true not null,
+  senast_rapporterad_status text,
+  created_at timestamp with time zone default now() not null
+);
+
+alter table public.driftkomponenter enable row level security;
+
 create table public.employees (
   id uuid default gen_random_uuid() not null,
   company_id uuid not null,
@@ -1170,6 +1183,25 @@ create table public.konsol_support_samtycken (
 
 alter table public.konsol_support_samtycken enable row level security;
 
+create table public.kyc_arkiv (
+  id uuid default gen_random_uuid() not null,
+  bolag_id_ursprung uuid not null,
+  bolag_namn text not null,
+  org_nr text,
+  byra_bolag_ids uuid[] default '{}'::uuid[] not null,
+  affarsforbindelse_avslutad_at timestamp with time zone default now() not null,
+  bevaras_till date not null,
+  avvecklad_av uuid,
+  orsak text,
+  kyc_assessments jsonb not null,
+  kyc_huvudman jsonb default '[]'::jsonb not null,
+  kyc_bilagor jsonb default '[]'::jsonb not null,
+  aml_flags jsonb default '[]'::jsonb not null,
+  created_at timestamp with time zone default now() not null
+);
+
+alter table public.kyc_arkiv enable row level security;
+
 create table public.kyc_assessments (
   id uuid default gen_random_uuid() not null,
   company_id uuid not null,
@@ -1186,10 +1218,51 @@ create table public.kyc_assessments (
   giltig_till date,
   granskad_av uuid,
   beslutad_at timestamp with time zone,
-  created_at timestamp with time zone default now() not null
+  created_at timestamp with time zone default now() not null,
+  identitetshandling_typ text,
+  identitetshandling_referens text,
+  identitetshandling_utfardare text,
+  identitetshandling_giltig_till date,
+  sanktionslista_kalla text,
+  sanktionslista_datum date,
+  pep_kalla text,
+  pep_datum date
 );
 
 alter table public.kyc_assessments enable row level security;
+
+create table public.kyc_bilagor (
+  id uuid default gen_random_uuid() not null,
+  kyc_id uuid not null,
+  company_id uuid not null,
+  typ text not null,
+  storage_path text not null,
+  file_name text not null,
+  mime_type text,
+  file_size bigint,
+  beskrivning text,
+  uppladdad_av uuid default auth.uid(),
+  created_at timestamp with time zone default now() not null
+);
+
+alter table public.kyc_bilagor enable row level security;
+
+create table public.kyc_huvudman (
+  id uuid default gen_random_uuid() not null,
+  kyc_id uuid not null,
+  company_id uuid not null,
+  namn text not null,
+  personnummer text,
+  fodelsedatum date,
+  agarandel numeric(5,2),
+  kontrollsatt text not null,
+  kalla text,
+  kontrollerad_at timestamp with time zone default now() not null,
+  kontrollerad_av uuid default auth.uid(),
+  created_at timestamp with time zone default now() not null
+);
+
+alter table public.kyc_huvudman enable row level security;
 
 create table public.lager_handelser (
   id uuid default gen_random_uuid() not null,
