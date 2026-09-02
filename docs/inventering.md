@@ -12,7 +12,7 @@ pg_net 0.20.3 (public), pg_cron 1.6.4, pgcrypto 1.3 (extensions), uuid-ossp 1.1 
 
 ## Edge functions (32)
 
-Kontrollerat 2026-09-02: fortfarande 32 funktioner och ingen av dem har uppdaterats sedan dumpen (senaste `updated_at` är 2026-07-26), så källkoden i `supabase/functions/` är aktuell.
+Kontrollerat 2026-09-02: fortfarande 32 funktioner och ingen av dem har uppdaterats sedan dumpen (senaste `updated_at` är 2026-07-26), så källkoden i `supabase/functions/` är aktuell. **Undantag 2026-09-02:** `konsol` deployad som version 19 (exakt e-postjämförelse i stället för `.ilike`); dumpen speglar den versionen. `robo-bp-chat` (ägarskapskontroll på `conversation_id`, repo-commit 92420a4) är ännu inte driftsatt.
 
 | Slug | verify_jwt | Senast uppdaterad (version) |
 |---|---|---|
