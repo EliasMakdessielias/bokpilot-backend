@@ -957,10 +957,11 @@ begin
     return jsonb_build_object('allowed', false, 'reason', 'in_progress', 'job_id', v_doc.ai_job_id);
   end if;
 
+  -- Bara tolkningar (document_id satt) räknas här; chattanropen har eget tak i ai_kvot_klaim.
   select count(*) filter (where user_id = p_user_id),
          count(*) filter (where company_id = p_company_id)
     into v_user_calls, v_company_calls
-    from public.ai_call_log where created_at > v_now - interval '60 seconds';
+    from public.ai_call_log where created_at > v_now - interval '60 seconds' and document_id is not null;
   if v_user_calls >= 8 or v_company_calls >= 20 then
     insert into public.ai_cooldowns(scope, scope_key, cooldown_until, reason)
       values (case when v_user_calls >= 8 then 'user' else 'company' end,
@@ -1026,15 +1027,16 @@ begin
   if p_user_id is null or coalesce(p_funktion, '') = '' then
     raise exception 'ai_kvot_klaim: användare och funktion krävs' using errcode = '22023';
   end if;
-  select count(*) filter (where user_id = p_user_id and created_at > v_now - interval '1 hour'),
-         count(*) filter (where user_id = p_user_id),
+  -- Användartaken räknar bara chattanrop (funktion satt); plattformstaket räknar alla AI-anrop.
+  select count(*) filter (where user_id = p_user_id and funktion is not null and created_at > v_now - interval '1 hour'),
+         count(*) filter (where user_id = p_user_id and funktion is not null),
          count(*) filter (where created_at > v_now - interval '1 hour')
     into v_timme, v_dygn, v_plattform
     from public.ai_call_log
    where created_at > v_now - interval '24 hours';
   if v_timme >= c_tak_timme then
     select min(created_at) into v_aldsta from public.ai_call_log
-     where user_id = p_user_id and created_at > v_now - interval '1 hour';
+     where user_id = p_user_id and funktion is not null and created_at > v_now - interval '1 hour';
     return jsonb_build_object('allowed', false, 'reason', 'timme', 'anvant', v_timme, 'tak', c_tak_timme,
       'retry_after_seconds', greatest(60, ceil(extract(epoch from (v_aldsta + interval '1 hour' - v_now)))::int));
   end if;
