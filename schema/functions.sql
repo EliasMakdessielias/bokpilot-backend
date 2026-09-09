@@ -4802,6 +4802,13 @@ CREATE OR REPLACE FUNCTION public.is_platform_admin()
  SET search_path TO 'public'
 AS $function$
   select exists(select 1 from platform_admins where lower(email) = lower(auth.jwt() ->> 'email'))
+     and (
+       coalesce(auth.jwt() ->> 'aal', 'aal1') = 'aal2'
+       or not exists (
+         select 1 from auth.mfa_factors f
+         where f.user_id = auth.uid() and f.status = 'verified'
+       )
+     )
 $function$
 ;
 
