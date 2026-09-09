@@ -48,7 +48,7 @@ export function addManader(iso, n) {
   return `${malAr}-${pad(mal)}-${pad(malDag)}`
 }
 
-// ── Uppdragstyper och frekvenser ─────────────────────────────────────────
+// ── Uppdragstyper och frekvenser ─────────────────────────────────────────────
 
 export const UPPDRAGSTYPER = [
   'lopande_bokforing', 'momsdeklaration', 'lon_agi', 'bokslut', 'arsredovisning', 'inkomstdeklaration',
@@ -85,7 +85,7 @@ export function perioder(frekvens, franIso, tillIso) {
   return ut
 }
 
-// ── Deadlineberäkning ──────────────────────────────────────────────────
+// ── Deadlineberäkning ────────────────────────────────────────────────────────
 
 const medHelg = (iso, parametrar) => (parametrar.helgforskjut ? forskjutTillVardag(iso) : iso)
 

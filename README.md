@@ -1,13 +1,13 @@
 # BokPilot – dump av `bokpilot-sverige` (Supabase)
 
-Ögonblicksbild av backendens hela kodbara innehåll, hämtad **2026-08-20** via Supabase-MCP från projektet `bokpilot-sverige` (ref `vzeqvapebkbapwflozbi`, eu-north-1, org `wtxdxhnzcxrbzpvysdyh`). Senast synkad mot databasen **2026-09-02** (etapp 10–16).
+Ögonblicksbild av backendens hela kodbara innehåll, hämtad **2026-08-20** via Supabase-MCP från projektet `bokpilot-sverige` (ref `vzeqvapebkbapwflozbi`, eu-north-1, org `wtxdxhnzcxrbzpvysdyh`). Senast synkad **2026-09-09** (edge-funktionerna efter GitHub Actions-driftsättningen 2026-09-07; databasschemat är oförändrat sedan etapp 10–16 den 2026-09-02, 87 migrationer).
 
 ## Innehåll
 
 | Sökväg | Innehåll |
 |---|---|
 | `supabase/migrations/` | Alla 87 migrationer ur `supabase_migrations.schema_migrations`, en fil per migration (`<version>_<namn>.sql`), MD5-verifierade mot databasen |
-| `supabase/functions/<slug>/` | Källkod för alla 32 edge functions; delade moduler (claudeChat, ocr, serviceState, deadlines m.fl.) ligger i `supabase/functions/_shared/` så att `../_shared/`-importerna stämmer. Ingen edge function har uppdaterats sedan dumpen (senaste `updated_at` 2026-07-26) |
+| `supabase/functions/<slug>/` | Källkod för alla 32 edge functions; delade moduler (claudeChat, ocr, serviceState, deadlines m.fl.) ligger i `supabase/functions/_shared/` så att `../_shared/`-importerna stämmer. Speglar det driftsatta läget efter deployen 2026-09-07 (alla 31 funktioner i kundappens repo `EliasMakdessielias/bokpilot`, commit 85a56cc, via workflowen `deploy-edge-functions.yml`, samt `konsol` v21 från `bokpilot-admin`). Sedan workflowen finns är repot källan för det som körs, och dumpen synkas från repot (LF-normaliserat) i stället för att transkriberas via MCP |
 | `schema/tables.sql` | CREATE TABLE för alla 127 tabeller i `public` (kolumner, defaults, not null) + RLS-aktivering |
 | | *Schemafilerna uppdaterade 2026-09-02 efter etapp 10–16 (backupunderlag, driftövervakning, rollstyrning på lönetabellerna, KYC-datamodell med bucket, KYC-bevakning, append-only operatörslogg, KYC-arkiv vid avveckling; 261 funktioner, 85 triggrar) — dessförinnan 2026-08-25 efter etapp 4–9 (search_path-låsning + anon-indragning, FK-index, RLS-InitPlan, behörighetskoll utan uid-beroende, anon utan tabellrättigheter, BFL-spärr vid bolagsradering, avstämning databas mot Storage)* |
 | `schema/constraints.sql` | PK/FK/unique/check-constraints |
@@ -25,7 +25,7 @@
 - **Tabelldata** — detta är struktur och kod, inga rader ur användartabeller. Särskilt `interna_nycklar` (hemligheter) är medvetet inte dumpad. Registret `driftkomponenter` (etapp 11) är också data och speglas bara via migrationerna.
 - **Auth-användare, storage-filinnehåll, edge function-secrets** (miljövariabler) — nås inte via MCP.
 - **Storage-schemat** — bucketdefinitioner och policies på `storage.objects` (t.ex. `kyc_obj_select`/`kyc_obj_insert` från etapp 13b och 16) ingår inte i `schema/`, som bara speglar `public`. Bucketarna listas i `docs/inventering.md`; storage-policyerna finns enbart i migrationsfilerna.
-- **Frontendkoden** — den finns inte i Supabase; arbetskopian ligger inte på den här datorn.
+- **Frontendkoden** — den finns inte i Supabase. Arbetskopiorna är klonade i `Projekt\_repos\bokpilot` (kundappen, inkl. `supabase/functions/`) och `Projekt\_repos\bokpilot-admin` (operatörskonsolen) sedan 2026-08-26.
 
 ## Notera
 

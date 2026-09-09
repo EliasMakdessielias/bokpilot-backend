@@ -5,8 +5,8 @@
 // active                → tillåt affärsmutation (skapa document, OCR, tolkning)
 // paused / blocked      → neka kontrollerat med ren svensk orsak
 //
-// Återanvänds av inbound-email, tolka-underlag och ocr-folio. IMAP-importern hanterar
-// det kontrollerade webhook-svaret (se scripts/imap-import/parse.mjs classifyWebhookOutcome).
+// Återanvänds av inbound-email, tolka-underlag och ocr-folio. (IMAP-importern som tidigare
+// tolkade det kontrollerade webhook-svaret togs bort 2026-09-07 med Google Workspace.)
 
 export const SERVICE_PAUSED_MESSAGE = 'Tjänsten är pausad för detta företag. Kontakta BokPilot support.'
 export const LOCK_STATES = ['paused', 'blocked']

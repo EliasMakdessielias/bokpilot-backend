@@ -1,4 +1,4 @@
-# Inventering – bokpilot-sverige (2026-08-20, senast uppdaterad 2026-09-02)
+# Inventering – bokpilot-sverige (2026-08-20, senast uppdaterad 2026-09-09)
 
 Projekt: `bokpilot-sverige`, ref `vzeqvapebkbapwflozbi`, eu-north-1.
 
@@ -12,42 +12,42 @@ pg_net 0.20.3 (public), pg_cron 1.6.4, pgcrypto 1.3 (extensions), uuid-ossp 1.1 
 
 ## Edge functions (32)
 
-Kontrollerat 2026-09-02: fortfarande 32 funktioner och ingen av dem har uppdaterats sedan dumpen (senaste `updated_at` är 2026-07-26), så källkoden i `supabase/functions/` är aktuell. **Undantag 2026-09-02:** `konsol` deployad som version 19 (exakt e-postjämförelse i stället för `.ilike`); dumpen speglar den versionen. `robo-bp-chat` (ägarskapskontroll på `conversation_id`, repo-commit 92420a4) är ännu inte driftsatt.
+Kontrollerat 2026-09-09: fortfarande 32 funktioner. **Alla 31 funktioner i kundappens repo driftsattes på nytt 2026-09-07 kl. 20:23 UTC** av GitHub Actions-workflowen `deploy-edge-functions.yml` (repot `EliasMakdessielias/bokpilot`, commit 85a56cc) — första gången den gick igenom sedan repohemligheten `SUPABASE_ACCESS_TOKEN` lades in; versionsnumren steg med åtta steg för samtliga, så workflowen kördes flera gånger innan den lyckades. Därmed är `robo-bp-chat` (ägarskapskontroll på `conversation_id`, repo-commit 92420a4, odeployad sedan 2026-07-26) driftsatt — verifierat mot den driftsatta källkoden 2026-09-09. `konsol` driftsattes som version 21 samma kväll (19:24 UTC) från `bokpilot-admin`; koden är oförändrad sedan v19 (exakt e-postjämförelse i stället för `.ilike`). Dumpens `supabase/functions/` speglar det driftsatta läget: fyra filer uppdaterades 2026-09-09 från kundappens repo (`robo-bp-chat/index.ts` med ägarskapskontrollen, `_shared/serviceState.ts` med kommentaren om att IMAP-importern togs bort 2026-09-07, `_shared/ocr.ts` med Unicode-escaper i stället för literala tecken samt `_shared/deadlines.js`, där dumpens tidigare transkription hade tappat tecken i två kommentarslinjer); övriga 27 var redan identiska med repot (radslut bortsett). Sedan pushen deployar workflowen är repot källan för det som körs; dumpen synkas därför från repot (LF-normaliserat) och en manuell deploy via Supabase-kopplingen är reservväg.
 
-| Slug | verify_jwt | Senast uppdaterad (version) |
+| Slug | verify_jwt | Version (driftsatt 2026-09-07) |
 |---|---|---|
-| admin | ja | v8 |
-| annual-report-ai | ja | v9 |
-| annual-report-pdf | ja | v7 |
-| ansokan-notis | nej | v7 |
-| assistent-ai | ja | v8 |
-| bokfor-ai | ja | v9 |
-| bokforingsassistent | ja | v9 |
-| bokslut-ai | ja | v12 |
-| byra-inbjudan | ja | v5 |
-| byra-medarbetare | ja | v2 |
-| byrastod-jobb | nej | v1 |
-| ekonomichef-ai | ja | v8 |
-| granska-ai | ja | v8 |
-| hamta-foretag | ja | v7 |
-| inbound-email | nej | v10 |
-| kivra-skicka | ja | v7 |
-| kivra-sync | ja | v7 |
-| konsol | nej | v13 |
-| losenord-notis | nej | v1 |
-| manadskontroll-ai | ja | v9 |
-| mcp-server | ja | v18 |
-| notif-unsubscribe | nej | v8 |
-| ocr-folio | ja | v7 |
-| report-error | nej | v8 |
-| robo-bp-chat | ja | v8 |
-| skattekonto-sync | ja | v7 |
-| stadning-underlag | nej | v2 |
-| stripe-checkout | ja | v7 |
-| stripe-portal | ja | v7 |
-| stripe-webhook | nej | v8 |
-| support-ai | ja | v9 |
-| tolka-underlag | ja | v8 |
+| admin | ja | v16 |
+| annual-report-ai | ja | v17 |
+| annual-report-pdf | ja | v15 |
+| ansokan-notis | nej | v15 |
+| assistent-ai | ja | v16 |
+| bokfor-ai | ja | v17 |
+| bokforingsassistent | ja | v17 |
+| bokslut-ai | ja | v20 |
+| byra-inbjudan | ja | v13 |
+| byra-medarbetare | ja | v10 |
+| byrastod-jobb | nej | v9 |
+| ekonomichef-ai | ja | v16 |
+| granska-ai | ja | v16 |
+| hamta-foretag | ja | v15 |
+| inbound-email | nej | v18 |
+| kivra-skicka | ja | v15 |
+| kivra-sync | ja | v15 |
+| konsol | nej | v21 (från bokpilot-admin) |
+| losenord-notis | nej | v9 |
+| manadskontroll-ai | ja | v17 |
+| mcp-server | ja | v26 |
+| notif-unsubscribe | nej | v16 |
+| ocr-folio | ja | v15 |
+| report-error | nej | v16 |
+| robo-bp-chat | ja | v16 |
+| skattekonto-sync | ja | v15 |
+| stadning-underlag | nej | v10 |
+| stripe-checkout | ja | v15 |
+| stripe-portal | ja | v15 |
+| stripe-webhook | nej | v16 |
+| support-ai | ja | v17 |
+| tolka-underlag | ja | v16 |
 
 ## Storage-buckets
 
@@ -160,6 +160,8 @@ Funktionen är SECURITY DEFINER och anropbar enbart av `postgres`/`service_role`
 **Vakten.** `cron_driftkontroll()` (låst till `postgres`/`service_role`) körs av jobbet `driftkontroll-natt` (`50 3 * * *`) och larmar via `report_system_error` med koden `DRIFT_STATUS_ANDRAD` **enbart när en komponents status har ändrats** sedan senaste larm (jämförs mot `senast_rapporterad_status`) — ett dagligt larm om ett konstant tillstånd tränar bort uppmärksamheten, vilket är precis hur `folio-ocr` kunde ligga nere i sex veckor. Allvarlighet `error` om någon komponent inte är OK, annars `info`; hela statusbilden bifogas. Vakten registrerar eget hjärtslag (`driftkontroll`) i `worker_health`; sedan etapp 14 finns den även i sitt eget register, så `driftstatus()` visar TYST vid manuell kontroll om den skulle sluta köra.
 
 - `20260826091028_etapp_11_driftovervakning_v1` – tabellen, båda funktionerna, rättigheterna, de första tretton registerraderna och cron-jobbet.
+
+**Fynd 2026-09-09 — vakten larmar falskt (rättning förberedd, ännu inte applicerad).** Sedan `driftkontroll-natt` registrerades i sitt eget register (etapp 14b) har `driftstatus()` varje natt dömt vakten själv som FEL med detaljen "Senaste körning: running", och `kivra-sync-10min` har växlat OK → FEL → OK sex gånger på tolv dygn (29/8, 31/8, 1/9, 5/9, 6/9 och 9/9) — sju larm med koden `DRIFT_STATUS_ANDRAD`, vart och ett en urgent-notis till plattformsadministratörerna, utan att något varit fel. Orsaken är lateral-frågan som väljer senaste status med `array_agg(... order by end_time desc)`: en pågående körning har `end_time = null`, och null sorteras först vid fallande sortering, så när vakten kör 03:50 ser den sin egen rad (running) och kivra-syncens rad som startar samma sekund (running/sending) som "senaste körning". Bekräftat 2026-09-09 mot `cron.job_run_details` (samtliga 9 044 körningar är avslutade; ingen rad saknar `end_time` utom under själva körningen) och med en syntetisk sortering. Rättningen — `and r.end_time is not null` i lateral-frågan, baslinjen för `driftkontroll-natt` åter OK, samt `imap-import` avaktiverad i registret eftersom IMAP-importen togs bort 2026-09-07 (kundappens commit 85a56cc, Google ur driftkedjan) — ligger som etapp 11b/11c och väntar på klartecken; efter applicering blir det 89 migrationer och 13 aktiva komponenter. Kvar med status FEL på riktigt: `stripe-webhook` (planerna saknar Stripe-pris-ID — beslutet om abonnemangsplaner).
 
 ## Etapp 12 – rollstyrning på lönetabellerna (2026-09-02)
 

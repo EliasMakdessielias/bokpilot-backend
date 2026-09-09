@@ -218,6 +218,14 @@ FRÅGA: ${question}`
 
     // 5. Persistera konversation + meddelanden + audit (service role; medlemskap redan verifierat).
     let convId = isStr(conversation_id) ? conversation_id : null
+    // conversation_id kommer från klienten och måste tillhöra samma bolag. Utan
+    // kontrollen kunde en inloggad användare skriva in meddelanden i ett annat
+    // bolags konversation — skrivningarna sker med service role, alltså förbi RLS.
+    if (convId) {
+      const { data: konv } = await admin.from('robo_bp_conversations')
+        .select('id').eq('id', convId).eq('company_id', company_id).maybeSingle()
+      if (!konv) return json({ error: 'Konversationen hör inte till detta bolag' }, 403)
+    }
     if (!convId) { const { data: c } = await admin.from('robo_bp_conversations').insert({ company_id, fiscal_year_id: descriptor?.fiscalYearId || null, user_id: user.id, title: question.slice(0, 80), context_view: view }).select('id').single(); convId = c?.id || null }
     if (convId) {
       await admin.from('robo_bp_messages').insert({ conversation_id: convId, company_id, user_id: user.id, role: 'user', content: question })

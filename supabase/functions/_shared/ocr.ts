@@ -19,8 +19,8 @@ export function normalizeOcrText(text: unknown, maxLen = OCR_TEXT_MAX_LEN): stri
   let t = String(text ?? '')
   if (!t.trim()) return ''
   t = t.replace(/\r\n?/g, '\n')
-    .replace(/[   ]/g, ' ')
-    .replace(/[−‒–—―]/g, '-')
+    .replace(/[\u00A0\u2007\u202F]/g, ' ')
+    .replace(/[\u2212\u2012\u2013\u2014\u2015]/g, '-')
   t = t.replace(/(\d),\n(\d{2})(?!\d)/g, '$1,$2')
   t = t.replace(/(\d)\n,(\d{2})(?!\d)/g, '$1,$2')
   t = t.split('\n').map(l => l.replace(/[ \t]+$/, '').replace(/[ \t]{2,}/g, '  ')).join('\n')
