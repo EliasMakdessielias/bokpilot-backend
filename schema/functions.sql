@@ -5730,6 +5730,27 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.orgnr_normaliserat(p text)
+ RETURNS text
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+declare
+  d text := regexp_replace(coalesce(p, ''), '\D', '', 'g');
+  s int := 0; n int; i int;
+begin
+  if length(d) = 12 and left(d, 2) in ('16', '19', '20') then d := substr(d, 3); end if;
+  if length(d) <> 10 then return null; end if;
+  for i in 1..10 loop
+    n := substr(d, i, 1)::int;
+    if i % 2 = 1 then n := n * 2; if n > 9 then n := n - 9; end if; end if;
+    s := s + n;
+  end loop;
+  if s % 10 <> 0 then return null; end if;
+  return substr(d, 1, 6) || '-' || substr(d, 7, 4);
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.protect_archive_number()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -7415,12 +7436,17 @@ declare
   v_approved boolean := coalesce(((auth.jwt() -> 'app_metadata') ->> 'approved')::boolean, false);
   v_company uuid;
   v_ansokan uuid;
+  v_org_nr text := public.orgnr_normaliserat(p_org_nr);
 begin
   if v_user is null then
     raise exception 'Ej inloggad';
   end if;
   if p_bolagsnamn is null or length(trim(p_bolagsnamn)) = 0 then
     raise exception 'Bolagsnamn saknas';
+  end if;
+  -- 2026-09-09: organisationsnummer (eller personnummer för enskild firma) krävs och ska ha giltig kontrollsiffra.
+  if v_org_nr is null then
+    raise exception 'Ange ett giltigt organisationsnummer (tio siffror, t.ex. 556123-4567)';
   end if;
   if length(coalesce(p_meddelande, '')) > 2000 then
     raise exception 'Meddelandet är för långt (max 2000 tecken)';
@@ -7431,7 +7457,7 @@ begin
   end if;
 
   insert into companies (name, org_nr, suspended)
-    values (trim(p_bolagsnamn), nullif(trim(coalesce(p_org_nr, '')), ''), not v_approved)
+    values (trim(p_bolagsnamn), v_org_nr, not v_approved)
     returning id into v_company;
 
   insert into user_companies (user_id, company_id, role, email)
@@ -7440,7 +7466,7 @@ begin
   if not v_approved then
     insert into beta_ansokningar (user_id, company_id, epost, bolagsnamn, org_nr, meddelande)
       values (v_user, v_company, v_epost, trim(p_bolagsnamn),
-              nullif(trim(coalesce(p_org_nr, '')), ''),
+              v_org_nr,
               nullif(trim(coalesce(p_meddelande, '')), ''))
       returning id into v_ansokan;
   end if;
