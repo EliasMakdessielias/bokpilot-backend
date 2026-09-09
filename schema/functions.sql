@@ -3986,10 +3986,13 @@ AS $function$
   from public.driftkomponenter k
   left join cron.job j on j.jobname = k.namn
   left join lateral (
+    -- Bara avslutade körningar (end_time satt). En pågående körning har end_time = null,
+    -- som sorteras först vid desc — då dömde vakten sig själv och jobb som startar samma
+    -- sekund (kivra-sync 03:50) som FEL med "Senaste körning: running". Rättat i etapp 11b.
     select max(r.end_time) filter (where r.status = 'succeeded') as senaste_ok,
            (array_agg(r.status      order by r.end_time desc))[1] as senaste_status,
            (array_agg(r.return_message order by r.end_time desc))[1] as senaste_meddelande
-    from cron.job_run_details r where r.jobid = j.jobid
+    from cron.job_run_details r where r.jobid = j.jobid and r.end_time is not null
   ) d on true
   where k.aktiv and k.typ = 'cron'
 
