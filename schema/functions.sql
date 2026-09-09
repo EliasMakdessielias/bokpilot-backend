@@ -4533,6 +4533,11 @@ begin
   delete from public.inbound_email_log where created_at < now() - interval '12 months';
   get diagnostics n = row_count;
   tabell := 'inbound_email_log'; raderade := n; return next;
+
+  -- 2026-09-09: ai_call_log (räknaren bakom AI-kvoterna) bevaras tolv månader.
+  delete from public.ai_call_log where created_at < now() - interval '12 months';
+  get diagnostics n = row_count;
+  tabell := 'ai_call_log'; raderade := n; return next;
 end $function$
 ;
 
@@ -5567,7 +5572,8 @@ CREATE OR REPLACE FUNCTION public.notify_on_inbound_document()
 AS $function$
 declare et text; dt text;
 begin
-  if NEW.source is distinct from 'email' then return NEW; end if;
+  -- 'email' = historisk IMAP-import, 'cloudflare-email' = Cloudflare Email Routing (produktion).
+  if coalesce(NEW.source, '') not in ('email', 'cloudflare-email') then return NEW; end if;
   dt := case NEW.kategori
     when 'kvitto' then 'Kvitto' when 'leverantorsfaktura' then 'Leverantörsfaktura'
     when 'kundfaktura' then 'Kundfaktura' when 'avtal' then 'Avtal' when 'dokument' then 'Dokument'
