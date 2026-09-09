@@ -140,6 +140,8 @@ Begrepp som används i detta avtal har samma innebörd som i artikel 4 GDPR, om 
 
 8.4 Byrån ska ställa förstärkta krav på åtkomstbegränsning, loggning och kryptering för de särskilda kategorier av personuppgifter och personnummer som behandlas i lönemodulen, enligt Bilaga 3.
 
+8.5 Byrån tillhandahåller tvåfaktorsautentisering för samtliga användarkonton i BokPilot och tillämpar den obligatoriskt för sina egna administratörskonton med tillgång till fler än ett bolags uppgifter. Klienten ansvarar för att dess användare aktiverar skyddet i den omfattning Klienten finner lämplig. Byrån får återställa en användares tvåfaktorsautentisering endast efter dokumenterad identitetskontroll; åtgärden loggas och meddelas användaren.
+
 ## 9. Underbiträden
 
 9.1 Klienten lämnar genom detta avtal ett allmänt skriftligt förhandstillstånd (artikel 28.2 GDPR) till att Byrån anlitar de Underbiträden som anges i Bilaga 2 för de ändamål och på de villkor som där framgår.
@@ -443,7 +445,7 @@ Automatisk gallring i BokPilot körs [nattligen] enligt Byråns gallringsrutin. 
 | Digital brevlåda | Kivra Sverige AB — Sverige |
 | Trafikförmedling, DNS, CDN och TLS-terminering | Cloudflare — globalt nätverk av anslutningspunkter; ingen varaktig lagring av innehåll |
 | Byråns e-post och dokumenthantering | Microsoft 365 — datacenter inom EU (EU Data Boundary); [ANGE TENANTENS DATAPLACERING] |
-| Planerad långtidsarkivering | Microsoft Azure Blob Storage, region Sweden Central, Sverige [EJ DRIFTSATT PER 2026-08-26] |
+| Säkerhetskopia och långtidsarkivering av underlag | Microsoft Azure Blob Storage, region Sweden Central, Sverige — i drift sedan 2026-09-09 (nattlig kopia av underlag, arkivfiler, årsredovisningsexporter och supportfiler till oföränderlig behållare per räkenskapsår) |
 
 ## 11. Instruktion om tredjelandsöverföring
 
@@ -520,7 +522,8 @@ Enligt Bilaga 4.
 - Filer i BokPilots fillagring (underlag, arkiv, bilagor) omfattas inte av databasens säkerhetskopior. Fillagringen är redundant lagrad i AWS S3 inom region eu-north-1. [ANGE RUTIN FÖR SEPARAT SÄKERHETSKOPIA AV FILLAGRINGEN — se granskningsanteckning 12.]
 - En nattlig kontroll jämför databasens hänvisningar till filer med fillagringens faktiska innehåll åt båda hållen och larmar vid saknade filer; föräldralösa filer rapporteras för gallring.
 - Schemalagda jobb och kritiska komponenter övervakas med hjärtslag och larm vid avvikelse.
-- Planerad långtidsarkivering av Räkenskapsinformation i oföränderlig (WORM) lagring i Azure Sweden Central, med en behållare per räkenskapsår och kvarhållningstid beräknad enligt 7 kap. 2 § BFL [EJ DRIFTSATT].
+- Säkerhetskopia av Räkenskapsinformation i oföränderlig (WORM) lagring i Azure Sweden Central, med en behållare per räkenskapsår och kvarhållningstid beräknad enligt 7 kap. 2 § BFL — i drift sedan 2026-09-09.
+- Tvåfaktorsautentisering (TOTP) som varje användare kan aktivera för sitt konto; obligatorisk för Byråns plattformsadministratörer så snart de registrerat en faktor. Återställning sker först efter identitetskontroll, loggas i en append-only-logg och meddelas användaren per e-post.
 
 ## F. Gallring
 
