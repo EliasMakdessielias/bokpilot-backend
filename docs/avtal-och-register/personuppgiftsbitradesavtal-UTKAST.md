@@ -410,6 +410,8 @@ Från [STARTDATUM] och så länge Uppdragsavtalet gäller, samt under avveckling
 
 8.3 Underlag som Klienten skickar per e-post till Byrån passerar Byråns e-postsystem (Microsoft 365). Klienten uppmanas att i första hand ladda upp underlag i BokPilot eller skicka till bolagets inkorgsadress i BokPilot.
 
+8.4 Inkommande e-post till bolagets inkorgsadress genomgår en avsändarkontroll (att mejlets tekniska autentisering enligt SPF, DKIM eller DMARC avser samma domän som den synliga avsändaradressen). Underlag från avsändare som inte kunnat bekräftas tas emot och bevaras, men markeras för manuell granskning och överförs inte automatiskt till AI-tjänsten enligt avsnitt 7. Kontrollens resultat (domäner och utfall, aldrig rubriktext) lagras tillsammans med underlaget.
+
 ## 9. Bevarandetider och gallring
 
 | Uppgiftskategori | Bevarandetid | Rättslig grund / kommentar |
@@ -418,10 +420,10 @@ Från [STARTDATUM] och så länge Uppdragsavtalet gäller, samt under avveckling
 | Anställningsuppgifter i lönemodulen som inte ingår i Räkenskapsinformation | Under anställningen och därefter [ANTAL] månader, eller så länge de behövs för rättelse av AGI | [GRANSKA] |
 | Användarkonton och behörigheter | Raderas [90] dagar efter att Klienten avanmält användaren eller Uppdragsavtalet upphört | [GRANSKA] |
 | Inloggnings- och säkerhetsloggar | [12] månader | Delvis Byråns egen behandling |
-| Loggar över AI-anrop | [90] dagar | [GRANSKA — kontrollera mot faktisk gallringsrutin] |
+| Loggar över AI-anrop | Kvoträknaren (`ai_call_log`: användar-id, funktion, tidpunkt — inget innehåll): [12] månader. AI-konversationer (`assistent_logg`, `robo_bp_messages`, `support_ai_events`): 24 månader. AI-förslag kopplade till verifikation (`ai_bokforing_logg`): bevaras med Räkenskapsinformationen | [GRANSKA — 24-månadersgallringen är automatisk sedan 2026-08-17; 12 månader för kvoträknaren är förslag enligt beslutsunderlaget 2026-09-02 och ingår ännu inte i gallringsjobbet] |
 | Supportärenden med bilagor | [12] månader efter att ärendet avslutats | [GRANSKA] |
 | Notifieringar och utskickskö | [30] dagar | [GRANSKA] |
-| Logg över inkommande e-post | [90] dagar | [GRANSKA] |
+| Logg över inkommande e-post (`inbound_email_log`: avsändare, mottagaradress, ämne, utfall) | 12 månader | Automatisk gallring, fastställd 2026-08-17. Avsändarkontrollens resultat på själva underlagsposten bevaras med Räkenskapsinformationen |
 | Utskick via Kivra | Enligt Kivras specifikation per meddelandetyp; Kivra raderar inom 30 dagar efter att avsändaravtalet upphört | Kivra Sverige AB:s specifikation till personuppgiftsbiträdesavtal |
 | E-post via Resend | Meddelande- och loggdata bevaras i 30 dagar hos Resend; kvarvarande data raderas inom 90 dagar efter kontots avslut | Resends dataskyddsvillkor |
 | Säkerhetskopior | [ANTAL] dagar rotation | [BEKRÄFTA MOT SUPABASES BACKUPINSTÄLLNING] |

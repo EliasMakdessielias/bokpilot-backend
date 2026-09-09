@@ -74,6 +74,7 @@ alter table public.assistent_logg add constraint assistent_logg_company_id_fkey 
 alter table public.assistent_logg add constraint assistent_logg_pkey PRIMARY KEY (id);
 alter table public.audit_log add constraint audit_log_company_id_fkey FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
 alter table public.audit_log add constraint audit_log_pkey PRIMARY KEY (id);
+alter table public.backup_objekt add constraint backup_objekt_pkey PRIMARY KEY (bucket, sokvag, etag);
 alter table public.bank_accounts add constraint bank_accounts_valuta_chk CHECK (((valuta IS NULL) OR (valuta = ANY (ARRAY['SEK'::text, 'USD'::text, 'GBP'::text, 'EUR'::text]))));
 alter table public.bank_accounts add constraint bank_accounts_company_id_fkey FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
 alter table public.bank_accounts add constraint bank_accounts_pkey PRIMARY KEY (id);

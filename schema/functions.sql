@@ -2684,6 +2684,40 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.backup_att_kopiera(p_max integer DEFAULT 100)
+ RETURNS TABLE(bucket text, sokvag text, storlek bigint, mimetyp text, etag text, andrad timestamp with time zone, tidigare_kopior integer)
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select l.bucket, l.sokvag, l.storlek, l.mimetyp, l.etag, l.andrad,
+         (select count(*)::int from public.backup_objekt b where b.bucket = l.bucket and b.sokvag = l.sokvag) as tidigare_kopior
+  from public.lista_lagringsobjekt() l
+  where not exists (
+    select 1 from public.backup_objekt b
+    where b.bucket = l.bucket and b.sokvag = l.sokvag and b.etag = l.etag)
+  order by l.andrad asc nulls first
+  limit greatest(1, least(coalesce(p_max, 100), 500));
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.backup_status()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select jsonb_build_object(
+    'objekt_i_storage', (select count(*) from public.lista_lagringsobjekt()),
+    'saknar_kopia', (select count(*) from public.lista_lagringsobjekt() l
+                       where not exists (select 1 from public.backup_objekt b
+                                         where b.bucket = l.bucket and b.sokvag = l.sokvag and b.etag = l.etag)),
+    'kopior_totalt', (select count(*) from public.backup_objekt),
+    'senaste_kopia', (select max(kopierad_at) from public.backup_objekt)
+  );
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.bas_class(p_nr text)
  RETURNS smallint
  LANGUAGE sql

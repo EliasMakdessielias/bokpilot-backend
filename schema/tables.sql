@@ -357,6 +357,17 @@ create table public.audit_log (
 
 alter table public.audit_log enable row level security;
 
+create table public.backup_objekt (
+  bucket text not null,
+  sokvag text not null,
+  etag text not null,
+  storlek bigint,
+  blobnamn text not null,
+  kopierad_at timestamp with time zone default now() not null
+);
+
+alter table public.backup_objekt enable row level security;
+
 create table public.bank_accounts (
   id uuid default gen_random_uuid() not null,
   company_id uuid not null,

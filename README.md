@@ -1,22 +1,22 @@
 # BokPilot – dump av `bokpilot-sverige` (Supabase)
 
-Ögonblicksbild av backendens hela kodbara innehåll, hämtad **2026-08-20** via Supabase-MCP från projektet `bokpilot-sverige` (ref `vzeqvapebkbapwflozbi`, eu-north-1, org `wtxdxhnzcxrbzpvysdyh`). Senast synkad mot databasen **2026-09-09** (etapp 11b/11c: driftvakten bedömer bara avslutade körningar, `imap-import` avregistrerad; kundappens säkerhetsmigrationer `byrastod_scope_v1`, `ai_kvot_v1`, `inbound_avsandare_v1`, `ai_kvot_v2`; edge-funktionerna efter GitHub Actions-driftsättningen 2026-09-07).
+Ögonblicksbild av backendens hela kodbara innehåll, hämtad **2026-08-20** via Supabase-MCP från projektet `bokpilot-sverige` (ref `vzeqvapebkbapwflozbi`, eu-north-1, org `wtxdxhnzcxrbzpvysdyh`). Senast synkad mot databasen **2026-09-09** (etapp 11b/11c: driftvakten bedömer bara avslutade körningar, `imap-import` avregistrerad; kundappens migrationer `byrastod_scope_v1`, `ai_kvot_v1`, `inbound_avsandare_v1`, `ai_kvot_v2` och `backup_underlag_v1`; edge-funktionerna efter GitHub Actions-driftsättningen 2026-09-07).
 
 ## Innehåll
 
 | Sökväg | Innehåll |
 |---|---|
-| `supabase/migrations/` | Alla 93 migrationer ur `supabase_migrations.schema_migrations`, en fil per migration (`<version>_<namn>.sql`), MD5-verifierade mot databasen |
+| `supabase/migrations/` | Alla 94 migrationer ur `supabase_migrations.schema_migrations`, en fil per migration (`<version>_<namn>.sql`), MD5-verifierade mot databasen |
 | `supabase/functions/<slug>/` | Källkod för alla 32 edge functions; delade moduler (claudeChat, ocr, serviceState, deadlines m.fl.) ligger i `supabase/functions/_shared/` så att `../_shared/`-importerna stämmer. Speglar det driftsatta läget efter deployen 2026-09-07 (alla 31 funktioner i kundappens repo `EliasMakdessielias/bokpilot`, commit 85a56cc, via workflowen `deploy-edge-functions.yml`, samt `konsol` v21 från `bokpilot-admin`). Sedan workflowen finns är repot källan för det som körs, och dumpen synkas från repot (LF-normaliserat) i stället för att transkriberas via MCP |
-| `schema/tables.sql` | CREATE TABLE för alla 127 tabeller i `public` (kolumner, defaults, not null) + RLS-aktivering |
-| | *Schemafilerna uppdaterade 2026-09-09 efter etapp 11b (`driftstatus()` räknar bara avslutade körningar) och kundappens fyra migrationer samma dag (`ai_call_log.funktion` + index, `ai_kvot_klaim` v1/v2, `ai_claim_job` med eget räknefönster, `byrastod_markera_forsenade(uuid[])`, `documents.avsandare_verifierad`/`avsandare_kontroll`; 262 funktioner, 198 index); dessförinnan 2026-09-02 efter etapp 10–16 (backupunderlag, driftövervakning, rollstyrning på lönetabellerna, KYC-datamodell med bucket, KYC-bevakning, append-only operatörslogg, KYC-arkiv vid avveckling; 261 funktioner, 85 triggrar) — dessförinnan 2026-08-25 efter etapp 4–9 (search_path-låsning + anon-indragning, FK-index, RLS-InitPlan, behörighetskoll utan uid-beroende, anon utan tabellrättigheter, BFL-spärr vid bolagsradering, avstämning databas mot Storage)* |
+| `schema/tables.sql` | CREATE TABLE för alla 128 tabeller i `public` (kolumner, defaults, not null) + RLS-aktivering |
+| | *Schemafilerna uppdaterade 2026-09-09 efter etapp 11b (`driftstatus()` räknar bara avslutade körningar) och kundappens fem migrationer samma dag (`ai_call_log.funktion` + index, `ai_kvot_klaim` v1/v2, `ai_claim_job` med eget räknefönster, `byrastod_markera_forsenade(uuid[])`, `documents.avsandare_verifierad`/`avsandare_kontroll`, tabellen `backup_objekt` med `backup_att_kopiera()`/`backup_status()` och cronjobbet `backup-underlag-natt`; 128 tabeller, 264 funktioner, 199 index, 10 cronjobb); dessförinnan 2026-09-02 efter etapp 10–16 (backupunderlag, driftövervakning, rollstyrning på lönetabellerna, KYC-datamodell med bucket, KYC-bevakning, append-only operatörslogg, KYC-arkiv vid avveckling; 261 funktioner, 85 triggrar) — dessförinnan 2026-08-25 efter etapp 4–9 (search_path-låsning + anon-indragning, FK-index, RLS-InitPlan, behörighetskoll utan uid-beroende, anon utan tabellrättigheter, BFL-spärr vid bolagsradering, avstämning databas mot Storage)* |
 | `schema/constraints.sql` | PK/FK/unique/check-constraints |
-| `schema/indexes.sql` | De 198 index som inte backar constraints |
-| `schema/functions.sql` | Alla 262 egna databasfunktioner (exkl. extension-ägda) |
+| `schema/indexes.sql` | De 199 index som inte backar constraints |
+| `schema/functions.sql` | Alla 264 egna databasfunktioner (exkl. extension-ägda) |
 | `schema/triggers.sql` | Alla 85 triggrar |
 | `schema/policies.sql` | Alla 166 RLS-policies i `public` |
 | `schema/grants.sql` | Tabell-, kolumn- och funktionsrättigheter för `anon`/`authenticated`/`service_role`; efter etapp 7 har `anon` inga tabellrättigheter kvar (RLS är inte längre enda skyddet) |
-| `schema/cron_jobs.sql` | De 9 pg_cron-jobben |
+| `schema/cron_jobs.sql` | De 10 pg_cron-jobben |
 | `types/database.types.ts` | Genererade TypeScript-typer (från 2026-08-20, inte regenererade efter etapp 10–16 — saknar `driftkomponenter`, `kyc_huvudman`, `kyc_bilagor`, `kyc_arkiv` och de nya kolumnerna i `kyc_assessments`) |
 | `docs/inventering.md` | Inventering: tabeller, edge functions, extensions, storage-buckets, migrationslista och etappbeskrivningar |
 

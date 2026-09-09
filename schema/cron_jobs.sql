@@ -1,4 +1,4 @@
--- pg_cron-jobb i bokpilot-sverige (vzeqvapebkbapwflozbi), dumpade 2026-09-02.
+-- pg_cron-jobb i bokpilot-sverige (vzeqvapebkbapwflozbi), dumpade 2026-09-02, jobb 11 tillagt 2026-09-09.
 -- Referens — körs redan i databasen. Authorization- och apikey-headern i jobb 4
 -- och 5 är projektets publicerbara nyckel (sb_publishable_...), som ersatte den
 -- tidigare anon-JWT:n vid nyckelrotationen; båda är publika till sin natur. De
@@ -72,3 +72,20 @@ select cron.schedule('driftkontroll-natt', '50 3 * * *',
 -- och finns inte längre i cron.job.
 select cron.schedule('kyc-bevakning-natt', '30 3 * * *',
   $job$ select public.cron_kyc_bevakning() $job$);
+
+-- jobid 11: backup-underlag-natt, schema '30 2 * * *', aktiv
+-- Kundappen 2026-09-09 (backup_underlag_v1): extern säkerhetskopia av Storage-underlagen
+-- till Azure Blob Storage i Sweden Central. Anropar edge-funktionen backup-underlag med
+-- den interna nyckeln backup_cron (interna_nycklar). Se docs/BACKUP-UNDERLAG.md i kundappen.
+select cron.schedule('backup-underlag-natt', '30 2 * * *', $job$
+  select net.http_post(
+    url := 'https://vzeqvapebkbapwflozbi.supabase.co/functions/v1/backup-underlag',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer sb_publishable_vyR02gFIVZH9zY7RBRvX7Q_mBogzd00',
+      'apikey', 'sb_publishable_vyR02gFIVZH9zY7RBRvX7Q_mBogzd00',
+      'x-backup-cron-secret', (select varde from public.interna_nycklar where namn = 'backup_cron')
+    ),
+    body := '{"cron": true}'::jsonb
+  );
+$job$);

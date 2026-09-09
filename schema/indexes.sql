@@ -31,6 +31,7 @@ CREATE INDEX idx_arkiv_mappar_parent_id ON public.arkiv_mappar USING btree (pare
 CREATE INDEX article_templates_company_idx ON public.article_templates USING btree (company_id);
 CREATE INDEX assistent_logg_company_manad ON public.assistent_logg USING btree (company_id, created_at);
 CREATE INDEX audit_log_company_idx ON public.audit_log USING btree (company_id, created_at DESC);
+CREATE INDEX backup_objekt_kopierad_idx ON public.backup_objekt USING btree (kopierad_at DESC);
 CREATE UNIQUE INDEX bank_accounts_company_account_nr_unik ON public.bank_accounts USING btree (company_id, account_nr);
 CREATE INDEX idx_bank_transactions_company_id ON public.bank_transactions USING btree (company_id);
 CREATE INDEX idx_bank_transactions_verifikation_id ON public.bank_transactions USING btree (verifikation_id);
