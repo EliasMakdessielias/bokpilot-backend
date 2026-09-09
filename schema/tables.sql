@@ -87,7 +87,8 @@ create table public.ai_call_log (
   created_at timestamp with time zone default now() not null,
   user_id uuid,
   company_id uuid,
-  document_id uuid
+  document_id uuid,
+  funktion text
 );
 
 alter table public.ai_call_log enable row level security;
@@ -838,7 +839,9 @@ create table public.documents (
   ai_last_error text,
   original_storage_path text,
   import_batch uuid,
-  raderad_at timestamp with time zone
+  raderad_at timestamp with time zone,
+  avsandare_verifierad boolean,
+  avsandare_kontroll jsonb
 );
 
 alter table public.documents enable row level security;

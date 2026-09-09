@@ -4,6 +4,7 @@ CREATE INDEX idx_ai_bokforing_logg_company ON public.ai_bokforing_logg USING btr
 CREATE INDEX idx_ai_bokforing_logg_document_id ON public.ai_bokforing_logg USING btree (document_id);
 CREATE INDEX idx_ai_logg_verifikation ON public.ai_bokforing_logg USING btree (verifikation_id) WHERE (verifikation_id IS NOT NULL);
 CREATE INDEX ai_call_log_recent_idx ON public.ai_call_log USING btree (created_at);
+CREATE INDEX ai_call_log_user_recent_idx ON public.ai_call_log USING btree (user_id, created_at DESC);
 CREATE INDEX ai_checklista_korningar_idx ON public.ai_checklista_korningar USING btree (company_id, created_at DESC);
 CREATE INDEX ai_cooldowns_until_idx ON public.ai_cooldowns USING btree (cooldown_until);
 CREATE INDEX ai_error_log_doc_idx ON public.ai_error_log USING btree (document_id, created_at DESC);

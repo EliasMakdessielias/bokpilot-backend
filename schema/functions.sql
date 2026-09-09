@@ -1009,6 +1009,46 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.ai_kvot_klaim(p_user_id uuid, p_funktion text, p_company_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_now timestamptz := now();
+  v_timme int; v_dygn int; v_plattform int;
+  v_aldsta timestamptz;
+  c_tak_timme constant int := 60;
+  c_tak_dygn constant int := 400;
+  c_tak_plattform_timme constant int := 1500;
+begin
+  if p_user_id is null or coalesce(p_funktion, '') = '' then
+    raise exception 'ai_kvot_klaim: användare och funktion krävs' using errcode = '22023';
+  end if;
+  select count(*) filter (where user_id = p_user_id and created_at > v_now - interval '1 hour'),
+         count(*) filter (where user_id = p_user_id),
+         count(*) filter (where created_at > v_now - interval '1 hour')
+    into v_timme, v_dygn, v_plattform
+    from public.ai_call_log
+   where created_at > v_now - interval '24 hours';
+  if v_timme >= c_tak_timme then
+    select min(created_at) into v_aldsta from public.ai_call_log
+     where user_id = p_user_id and created_at > v_now - interval '1 hour';
+    return jsonb_build_object('allowed', false, 'reason', 'timme', 'anvant', v_timme, 'tak', c_tak_timme,
+      'retry_after_seconds', greatest(60, ceil(extract(epoch from (v_aldsta + interval '1 hour' - v_now)))::int));
+  end if;
+  if v_dygn >= c_tak_dygn then
+    return jsonb_build_object('allowed', false, 'reason', 'dygn', 'anvant', v_dygn, 'tak', c_tak_dygn, 'retry_after_seconds', 3600);
+  end if;
+  if v_plattform >= c_tak_plattform_timme then
+    return jsonb_build_object('allowed', false, 'reason', 'plattform', 'anvant', v_plattform, 'tak', c_tak_plattform_timme, 'retry_after_seconds', 600);
+  end if;
+  insert into public.ai_call_log (user_id, company_id, funktion) values (p_user_id, p_company_id, p_funktion);
+  return jsonb_build_object('allowed', true, 'anvant_timme', v_timme + 1, 'tak_timme', c_tak_timme, 'anvant_dygn', v_dygn + 1, 'tak_dygn', c_tak_dygn);
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.aml_run_checks(p_company_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -3482,7 +3522,7 @@ begin
 end $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.byrastod_markera_forsenade()
+CREATE OR REPLACE FUNCTION public.byrastod_markera_forsenade(p_byra_bolag_ids uuid[] DEFAULT NULL::uuid[])
  RETURNS integer
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -3493,9 +3533,14 @@ begin
   if not public._ar_betrodd_backend() and not public.ar_byra_medlem() then
     raise exception 'endast byråmedlem eller systemjobb';
   end if;
+  -- En inloggad byråmedlem begränsas alltid till sina egna byråer, oavsett parameter.
+  if not public._ar_betrodd_backend() then
+    p_byra_bolag_ids := array(select public.mina_byraer());
+  end if;
   update public.uppdragsuppgift set status = 'forsenad', updated_at = now()
   where status in ('ej_paborjad', 'pagar')
-    and coalesce(justerat_forfallodatum, ordinarie_forfallodatum) < current_date;
+    and coalesce(justerat_forfallodatum, ordinarie_forfallodatum) < current_date
+    and (p_byra_bolag_ids is null or byra_bolag_id = any (p_byra_bolag_ids));
   get diagnostics v_antal = row_count;
   return v_antal;
 end $function$
