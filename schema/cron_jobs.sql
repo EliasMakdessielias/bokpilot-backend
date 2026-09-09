@@ -73,7 +73,7 @@ select cron.schedule('driftkontroll-natt', '50 3 * * *',
 select cron.schedule('kyc-bevakning-natt', '30 3 * * *',
   $job$ select public.cron_kyc_bevakning() $job$);
 
--- jobid 11: backup-underlag-natt, schema '30 2 * * *', aktiv
+-- jobid 11: backup-underlag-natt, schema '30 2 * * *', aktiv (kommandot med timeout sedan backup_underlag_v2 2026-09-09)
 -- Kundappen 2026-09-09 (backup_underlag_v1): extern säkerhetskopia av Storage-underlagen
 -- till Azure Blob Storage i Sweden Central. Anropar edge-funktionen backup-underlag med
 -- den interna nyckeln backup_cron (interna_nycklar). Se docs/BACKUP-UNDERLAG.md i kundappen.
@@ -86,6 +86,7 @@ select cron.schedule('backup-underlag-natt', '30 2 * * *', $job$
       'apikey', 'sb_publishable_vyR02gFIVZH9zY7RBRvX7Q_mBogzd00',
       'x-backup-cron-secret', (select varde from public.interna_nycklar where namn = 'backup_cron')
     ),
-    body := '{"cron": true}'::jsonb
+    body := '{"cron": true}'::jsonb,
+    timeout_milliseconds := 150000
   );
 $job$);
